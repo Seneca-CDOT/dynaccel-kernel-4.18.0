@@ -81,7 +81,7 @@ static void iwl_pcie_gen2_apm_stop(struct iwl_trans *trans, bool op_mode_leave)
 	/* Stop device's DMA activity */
 	iwl_pcie_apm_stop_master(trans);
 
-	iwl_trans_sw_reset(trans, false);
+	iwl_trans_sw_reset(trans);
 
 	/*
 	 * Clear "initialization complete" bit to move adapter from
@@ -105,12 +105,9 @@ static void iwl_trans_pcie_fw_reset_handshake(struct iwl_trans *trans)
 	if (trans->trans_cfg->device_family < IWL_DEVICE_FAMILY_AX210)
 		iwl_write_umac_prph(trans, UREG_NIC_SET_NMI_DRIVER,
 				    UREG_NIC_SET_NMI_DRIVER_RESET_HANDSHAKE);
-	else if (trans->trans_cfg->device_family == IWL_DEVICE_FAMILY_AX210)
+	else
 		iwl_write_umac_prph(trans, UREG_DOORBELL_TO_ISR6,
 				    UREG_DOORBELL_TO_ISR6_RESET_HANDSHAKE);
-	else
-		iwl_write32(trans, CSR_DOORBELL_VECTOR,
-			    UREG_DOORBELL_TO_ISR6_RESET_HANDSHAKE);
 
 	/* wait 200ms */
 	ret = wait_event_timeout(trans_pcie->fw_reset_waitq,
@@ -169,8 +166,7 @@ void _iwl_trans_pcie_gen2_stop_device(struct iwl_trans *trans)
 	/* Stop the device, and put it in low power state */
 	iwl_pcie_gen2_apm_stop(trans, false);
 
-	/* re-take ownership to prevent other users from stealing the device */
-	iwl_trans_sw_reset(trans, true);
+	iwl_trans_sw_reset(trans);
 
 	/*
 	 * Upon stop, the IVAR table gets erased, so msi-x won't
@@ -200,6 +196,9 @@ void _iwl_trans_pcie_gen2_stop_device(struct iwl_trans *trans)
 	 * interrupt
 	 */
 	iwl_enable_rfkill_int(trans);
+
+	/* re-take ownership to prevent other users from stealing the device */
+	iwl_pcie_prepare_card_hw(trans);
 }
 
 void iwl_trans_pcie_gen2_stop_device(struct iwl_trans *trans)
@@ -385,7 +384,8 @@ int iwl_trans_pcie_gen2_start_fw(struct iwl_trans *trans,
 	/* This may fail if AMT took ownership of the device */
 	if (iwl_pcie_prepare_card_hw(trans)) {
 		IWL_WARN(trans, "Exit HW not ready\n");
-		return -EIO;
+		ret = -EIO;
+		goto out;
 	}
 
 	iwl_enable_rfkill_int(trans);

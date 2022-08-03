@@ -7319,9 +7319,7 @@ static int bnx2_set_coalesce(struct net_device *dev,
 }
 
 static void
-bnx2_get_ringparam(struct net_device *dev, struct ethtool_ringparam *ering,
-		   struct kernel_ethtool_ringparam *kernel_ering,
-		   struct netlink_ext_ack *extack)
+bnx2_get_ringparam(struct net_device *dev, struct ethtool_ringparam *ering)
 {
 	struct bnx2 *bp = netdev_priv(dev);
 
@@ -7392,9 +7390,7 @@ bnx2_change_ring_size(struct bnx2 *bp, u32 rx, u32 tx, bool reset_irq)
 }
 
 static int
-bnx2_set_ringparam(struct net_device *dev, struct ethtool_ringparam *ering,
-		   struct kernel_ethtool_ringparam *kernel_ering,
-		   struct netlink_ext_ack *extack)
+bnx2_set_ringparam(struct net_device *dev, struct ethtool_ringparam *ering)
 {
 	struct bnx2 *bp = netdev_priv(dev);
 	int rc;

@@ -11,7 +11,6 @@
 #include <linux/module.h>
 #include <linux/msi.h>
 #include <linux/pci.h>
-#include <linux/pci-acpi.h>
 #include <linux/pci-ecam.h>
 #include <linux/srcu.h>
 #include <linux/rculist.h>
@@ -376,56 +375,6 @@ static struct pci_ops vmd_ops = {
 	.write		= vmd_pci_write,
 };
 
-#ifdef CONFIG_ACPI
-static struct acpi_device *vmd_acpi_find_companion(struct pci_dev *pci_dev)
-{
-	struct pci_host_bridge *bridge;
-	u32 busnr, addr;
-
-	if (pci_dev->bus->ops != &vmd_ops)
-		return NULL;
-
-	bridge = pci_find_host_bridge(pci_dev->bus);
-	busnr = pci_dev->bus->number - bridge->bus->number;
-	/*
-	 * The address computation below is only applicable to relative bus
-	 * numbers below 32.
-	 */
-	if (busnr > 31)
-		return NULL;
-
-	addr = (busnr << 24) | ((u32)pci_dev->devfn << 16) | 0x8000FFFFU;
-
-	dev_dbg(&pci_dev->dev, "Looking for ACPI companion (address 0x%x)\n",
-		addr);
-
-	return acpi_find_child_device(ACPI_COMPANION(bridge->dev.parent), addr,
-				      false);
-}
-
-static bool hook_installed;
-
-static void vmd_acpi_begin(void)
-{
-	if (pci_acpi_set_companion_lookup_hook(vmd_acpi_find_companion))
-		return;
-
-	hook_installed = true;
-}
-
-static void vmd_acpi_end(void)
-{
-	if (!hook_installed)
-		return;
-
-	pci_acpi_clear_companion_lookup_hook();
-	hook_installed = false;
-}
-#else
-static inline void vmd_acpi_begin(void) { }
-static inline void vmd_acpi_end(void) { }
-#endif /* CONFIG_ACPI */
-
 static void vmd_attach_resources(struct vmd_dev *vmd)
 {
 	vmd->dev->resource[VMD_MEMBAR1].child = &vmd->resources[1];
@@ -587,10 +536,9 @@ static int vmd_enable_domain(struct vmd_dev *vmd, unsigned long features)
 
 	vmd->irq_domain = pci_msi_create_irq_domain(fn, &vmd_msi_domain_info,
 						    x86_vector_domain);
-	if (!vmd->irq_domain) {
-		irq_domain_free_fwnode(fn);
+	irq_domain_free_fwnode(fn);
+	if (!vmd->irq_domain)
 		return -ENODEV;
-	}
 
 	pci_add_resource(&resources, &vmd->resources[0]);
 	pci_add_resource_offset(&resources, &vmd->resources[1], offset[0]);
@@ -601,14 +549,11 @@ static int vmd_enable_domain(struct vmd_dev *vmd, unsigned long features)
 	if (!vmd->bus) {
 		pci_free_resource_list(&resources);
 		irq_domain_remove(vmd->irq_domain);
-		irq_domain_free_fwnode(fn);
 		return -ENODEV;
 	}
 
 	vmd_attach_resources(vmd);
 	dev_set_msi_domain(&vmd->bus->dev, vmd->irq_domain);
-
-	vmd_acpi_begin();
 
 	pci_scan_child_bus(vmd->bus);
 	pci_assign_unassigned_bus_resources(vmd->bus);
@@ -622,8 +567,6 @@ static int vmd_enable_domain(struct vmd_dev *vmd, unsigned long features)
 		pcie_bus_configure_settings(child);
 
 	pci_bus_add_devices(vmd->bus);
-
-	vmd_acpi_end();
 
 	WARN(sysfs_create_link(&vmd->dev->dev.kobj, &vmd->bus->dev.kobj,
 			       "domain"), "Can't create symlink to domain\n");
@@ -727,7 +670,6 @@ static void vmd_cleanup_srcu(struct vmd_dev *vmd)
 static void vmd_remove(struct pci_dev *dev)
 {
 	struct vmd_dev *vmd = pci_get_drvdata(dev);
-	struct fwnode_handle *fn = vmd->irq_domain->fwnode;
 
 	sysfs_remove_link(&vmd->dev->dev.kobj, "domain");
 	pci_stop_root_bus(vmd->bus);
@@ -735,7 +677,6 @@ static void vmd_remove(struct pci_dev *dev)
 	vmd_cleanup_srcu(vmd);
 	vmd_detach_resources(vmd);
 	irq_domain_remove(vmd->irq_domain);
-	irq_domain_free_fwnode(fn);
 }
 
 #ifdef CONFIG_PM_SLEEP

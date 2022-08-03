@@ -491,7 +491,6 @@ static void mptcp_pm_nl_add_addr_received(struct mptcp_sock *msk)
 	struct mptcp_addr_info remote;
 	struct mptcp_addr_info local;
 	unsigned int subflows_max;
-	bool reset_port = false;
 
 	add_addr_accept_max = mptcp_pm_get_add_addr_accept_max(msk);
 	subflows_max = mptcp_pm_get_subflows_max(msk);
@@ -500,8 +499,7 @@ static void mptcp_pm_nl_add_addr_received(struct mptcp_sock *msk)
 		 msk->pm.add_addr_accepted, add_addr_accept_max,
 		 msk->pm.remote.family);
 
-	remote = msk->pm.remote;
-	if (lookup_subflow_by_daddr(&msk->conn_list, &remote))
+	if (lookup_subflow_by_daddr(&msk->conn_list, &msk->pm.remote))
 		goto add_addr_echo;
 
 	msk->pm.add_addr_accepted++;
@@ -510,15 +508,12 @@ static void mptcp_pm_nl_add_addr_received(struct mptcp_sock *msk)
 	    msk->pm.subflows >= subflows_max)
 		WRITE_ONCE(msk->pm.accept_addr, false);
 
-	/* pick id 0 port, if none is provided the remote address */
-	if (!remote.port) {
-		reset_port = true;
-		remote.port = sk->sk_dport;
-	}
-
 	/* connect to the specified remote address, using whatever
 	 * local address the routing configuration will pick.
 	 */
+	remote = msk->pm.remote;
+	if (!remote.port)
+		remote.port = sk->sk_dport;
 	memset(&local, 0, sizeof(local));
 	local.family = remote.family;
 
@@ -526,12 +521,8 @@ static void mptcp_pm_nl_add_addr_received(struct mptcp_sock *msk)
 	__mptcp_subflow_connect(sk, &local, &remote, 0, 0);
 	spin_lock_bh(&msk->pm.lock);
 
-	/* be sure to echo exactly the received address */
-	if (reset_port)
-		remote.port = 0;
-
 add_addr_echo:
-	mptcp_pm_announce_addr(msk, &remote, true);
+	mptcp_pm_announce_addr(msk, &msk->pm.remote, true);
 	mptcp_pm_nl_addr_send_ack(msk);
 }
 
@@ -768,7 +759,6 @@ out:
 static int mptcp_pm_nl_create_listen_socket(struct sock *sk,
 					    struct mptcp_pm_addr_entry *entry)
 {
-	int addrlen = sizeof(struct sockaddr_in);
 	struct sockaddr_storage addr;
 	struct mptcp_sock *msk;
 	struct socket *ssock;
@@ -793,11 +783,8 @@ static int mptcp_pm_nl_create_listen_socket(struct sock *sk,
 	}
 
 	mptcp_info2sockaddr(&entry->addr, &addr, entry->addr.family);
-#if IS_ENABLED(CONFIG_MPTCP_IPV6)
-	if (entry->addr.family == AF_INET6)
-		addrlen = sizeof(struct sockaddr_in6);
-#endif
-	err = kernel_bind(ssock, (struct sockaddr *)&addr, addrlen);
+	err = kernel_bind(ssock, (struct sockaddr *)&addr,
+			  sizeof(struct sockaddr_in));
 	if (err) {
 		pr_warn("kernel_bind error, err=%d", err);
 		goto out;

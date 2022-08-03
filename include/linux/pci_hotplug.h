@@ -44,8 +44,7 @@ struct hotplug_slot_ops {
 	int (*get_attention_status)	(struct hotplug_slot *slot, u8 *value);
 	int (*get_latch_status)		(struct hotplug_slot *slot, u8 *value);
 	int (*get_adapter_status)	(struct hotplug_slot *slot, u8 *value);
-	RH_KABI_REPLACE(int (*reset_slot)(struct hotplug_slot *slot, int probe),
-			int (*reset_slot)(struct hotplug_slot *slot, bool probe))
+	int (*reset_slot)		(struct hotplug_slot *slot, int probe);
 
 	RH_KABI_RESERVE(1)
 	RH_KABI_RESERVE(2)

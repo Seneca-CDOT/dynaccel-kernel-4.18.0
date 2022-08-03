@@ -367,8 +367,6 @@ struct tcp_sock {
 #define BPF_SOCK_OPS_TEST_FLAG(TP, ARG) 0
 #endif
 
-	u16 timeout_rehash;	/* Timeout-triggered rehash attempts */
-
 	u32 rcv_ooopack; /* Received out-of-order packets, for tcpinfo */
 
 /* Receiver side RTT estimation */
@@ -397,7 +395,6 @@ struct tcp_sock {
 	bool	is_mptcp;
 #endif
 #if IS_ENABLED(CONFIG_SMC)
-	bool	(*smc_hs_congested)(const struct sock *sk);
 	bool	syn_smc;	/* SYN includes SMC */
 #endif
 

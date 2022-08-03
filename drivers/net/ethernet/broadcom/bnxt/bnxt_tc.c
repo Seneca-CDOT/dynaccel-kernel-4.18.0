@@ -1884,6 +1884,9 @@ bnxt_tc_indr_block_cb_lookup(struct bnxt *bp, struct net_device *netdev)
 {
 	struct bnxt_flower_indr_block_cb_priv *cb_priv;
 
+	/* All callback list access should be protected by RTNL. */
+	ASSERT_RTNL();
+
 	list_for_each_entry(cb_priv, &bp->tc_indr_block_list, list)
 		if (cb_priv->tunnel_netdev == netdev)
 			return cb_priv;
@@ -1962,7 +1965,7 @@ static int bnxt_tc_setup_indr_cb(struct net_device *netdev, struct Qdisc *sch, v
 				 void *data,
 				 void (*cleanup)(struct flow_block_cb *block_cb))
 {
-	if (!netdev || !bnxt_is_netdev_indr_offload(netdev))
+	if (!bnxt_is_netdev_indr_offload(netdev))
 		return -EOPNOTSUPP;
 
 	switch (type) {

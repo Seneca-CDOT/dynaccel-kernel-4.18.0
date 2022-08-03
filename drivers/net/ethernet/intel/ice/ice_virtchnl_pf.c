@@ -2017,8 +2017,8 @@ int ice_sriov_configure(struct pci_dev *pdev, int num_vfs)
 
 	if (!num_vfs) {
 		if (!pci_vfs_assigned(pdev)) {
-			ice_free_vfs(pf);
 			ice_mbx_deinit_snapshot(&pf->hw);
+			ice_free_vfs(pf);
 			if (pf->lag)
 				ice_enable_lag(pf->lag);
 			return 0;
@@ -3298,51 +3298,12 @@ error_param:
 }
 
 /**
- * ice_vf_vsi_dis_single_txq - disable a single Tx queue
- * @vf: VF to disable queue for
- * @vsi: VSI for the VF
- * @q_id: VF relative (0-based) queue ID
- *
- * Attempt to disable the Tx queue passed in. If the Tx queue was successfully
- * disabled then clear q_id bit in the enabled queues bitmap and return
- * success. Otherwise return error.
- */
-static int
-ice_vf_vsi_dis_single_txq(struct ice_vf *vf, struct ice_vsi *vsi, u16 q_id)
-{
-	struct ice_txq_meta txq_meta = { 0 };
-	struct ice_tx_ring *ring;
-	int err;
-
-	if (!test_bit(q_id, vf->txq_ena))
-		dev_dbg(ice_pf_to_dev(vsi->back), "Queue %u on VSI %u is not enabled, but stopping it anyway\n",
-			q_id, vsi->vsi_num);
-
-	ring = vsi->tx_rings[q_id];
-	if (!ring)
-		return -EINVAL;
-
-	ice_fill_txq_meta(vsi, ring, &txq_meta);
-
-	err = ice_vsi_stop_tx_ring(vsi, ICE_NO_RESET, vf->vf_id, ring, &txq_meta);
-	if (err) {
-		dev_err(ice_pf_to_dev(vsi->back), "Failed to stop Tx ring %d on VSI %d\n",
-			q_id, vsi->vsi_num);
-		return err;
-	}
-
-	/* Clear enabled queues flag */
-	clear_bit(q_id, vf->txq_ena);
-
-	return 0;
-}
-
-/**
  * ice_vc_dis_qs_msg
  * @vf: pointer to the VF info
  * @msg: pointer to the msg buffer
  *
- * called from the VF to disable all or specific queue(s)
+ * called from the VF to disable all or specific
+ * queue(s)
  */
 static int ice_vc_dis_qs_msg(struct ice_vf *vf, u8 *msg)
 {
@@ -3379,15 +3340,30 @@ static int ice_vc_dis_qs_msg(struct ice_vf *vf, u8 *msg)
 		q_map = vqs->tx_queues;
 
 		for_each_set_bit(vf_q_id, &q_map, ICE_MAX_RSS_QS_PER_VF) {
+			struct ice_tx_ring *ring = vsi->tx_rings[vf_q_id];
+			struct ice_txq_meta txq_meta = { 0 };
+
 			if (!ice_vc_isvalid_q_id(vf, vqs->vsi_id, vf_q_id)) {
 				v_ret = VIRTCHNL_STATUS_ERR_PARAM;
 				goto error_param;
 			}
 
-			if (ice_vf_vsi_dis_single_txq(vf, vsi, vf_q_id)) {
+			/* Skip queue if not enabled */
+			if (!test_bit(vf_q_id, vf->txq_ena))
+				continue;
+
+			ice_fill_txq_meta(vsi, ring, &txq_meta);
+
+			if (ice_vsi_stop_tx_ring(vsi, ICE_NO_RESET, vf->vf_id,
+						 ring, &txq_meta)) {
+				dev_err(ice_pf_to_dev(vsi->back), "Failed to stop Tx ring %d on VSI %d\n",
+					vf_q_id, vsi->vsi_num);
 				v_ret = VIRTCHNL_STATUS_ERR_PARAM;
 				goto error_param;
 			}
+
+			/* Clear enabled queues flag */
+			clear_bit(vf_q_id, vf->txq_ena);
 		}
 	}
 
@@ -3636,14 +3612,6 @@ static int ice_vc_cfg_qs_msg(struct ice_vf *vf, u8 *msg)
 		if (qpi->txq.ring_len > 0) {
 			vsi->tx_rings[i]->dma = qpi->txq.dma_ring_addr;
 			vsi->tx_rings[i]->count = qpi->txq.ring_len;
-
-			/* Disable any existing queue first */
-			if (ice_vf_vsi_dis_single_txq(vf, vsi, q_idx)) {
-				v_ret = VIRTCHNL_STATUS_ERR_PARAM;
-				goto error_param;
-			}
-
-			/* Configure a queue with the requested settings */
 			if (ice_vsi_cfg_single_txq(vsi, vsi->tx_rings, q_idx)) {
 				v_ret = VIRTCHNL_STATUS_ERR_PARAM;
 				goto error_param;
@@ -4650,14 +4618,11 @@ void ice_vc_process_vf_msg(struct ice_pf *pf, struct ice_rq_event_info *event)
 
 	dev = ice_pf_to_dev(pf);
 	if (ice_validate_vf_id(pf, vf_id)) {
-		dev_err(dev, "Unable to locate VF for message from VF ID %d, opcode %d, len %d\n",
-			vf_id, v_opcode, msglen);
-		return;
+		err = -EINVAL;
+		goto error_handler;
 	}
 
 	vf = &pf->vf[vf_id];
-
-	mutex_lock(&vf->cfg_lock);
 
 	/* Check if VF is disabled. */
 	if (test_bit(ICE_VF_STATE_DIS, vf->vf_states)) {
@@ -4676,20 +4641,29 @@ void ice_vc_process_vf_msg(struct ice_pf *pf, struct ice_rq_event_info *event)
 			err = -EINVAL;
 	}
 
+	if (!ice_vc_is_opcode_allowed(vf, v_opcode)) {
+		ice_vc_send_msg_to_vf(vf, v_opcode,
+				      VIRTCHNL_STATUS_ERR_NOT_SUPPORTED, NULL,
+				      0);
+		return;
+	}
+
 error_handler:
 	if (err) {
 		ice_vc_send_msg_to_vf(vf, v_opcode, VIRTCHNL_STATUS_ERR_PARAM,
 				      NULL, 0);
 		dev_err(dev, "Invalid message from VF %d, opcode %d, len %d, error %d\n",
 			vf_id, v_opcode, msglen, err);
-		goto finish;
+		return;
 	}
 
-	if (!ice_vc_is_opcode_allowed(vf, v_opcode)) {
-		ice_vc_send_msg_to_vf(vf, v_opcode,
-				      VIRTCHNL_STATUS_ERR_NOT_SUPPORTED, NULL,
-				      0);
-		goto finish;
+	/* VF is being configured in another context that triggers a VFR, so no
+	 * need to process this message
+	 */
+	if (!mutex_trylock(&vf->cfg_lock)) {
+		dev_info(dev, "VF %u is being configured in another context that will trigger a VFR, so there is no need to handle this message\n",
+			 vf->vf_id);
+		return;
 	}
 
 	switch (v_opcode) {
@@ -4781,7 +4755,6 @@ error_handler:
 			 vf_id, v_opcode, err);
 	}
 
-finish:
 	mutex_unlock(&vf->cfg_lock);
 }
 

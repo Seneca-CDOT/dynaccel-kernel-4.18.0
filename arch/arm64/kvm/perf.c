@@ -22,34 +22,39 @@
 
 #include <asm/kvm_emulate.h>
 
-static unsigned int kvm_guest_state(void)
+static int kvm_is_in_guest(void)
 {
-	struct kvm_vcpu *vcpu = kvm_get_running_vcpu();
-	unsigned int state;
+        return kvm_get_running_vcpu() != NULL;
+}
 
-	if (!vcpu)
-		return 0;
+static int kvm_is_user_mode(void)
+{
+	struct kvm_vcpu *vcpu;
 
-	state = PERF_GUEST_ACTIVE;
-	if (!vcpu_mode_priv(vcpu))
-		state |= PERF_GUEST_USER;
+	vcpu = kvm_get_running_vcpu();
 
-	return state;
+	if (vcpu)
+		return !vcpu_mode_priv(vcpu);
+
+	return 0;
 }
 
 static unsigned long kvm_get_guest_ip(void)
 {
-	struct kvm_vcpu *vcpu = kvm_get_running_vcpu();
+	struct kvm_vcpu *vcpu;
 
-	if (WARN_ON_ONCE(!vcpu))
-		return 0;
+	vcpu = kvm_get_running_vcpu();
 
-	return *vcpu_pc(vcpu);
+	if (vcpu)
+		return *vcpu_pc(vcpu);
+
+	return 0;
 }
 
 static struct perf_guest_info_callbacks kvm_guest_cbs = {
-	.state		= kvm_guest_state,
-	.get_ip		= kvm_get_guest_ip,
+	.is_in_guest	= kvm_is_in_guest,
+	.is_user_mode	= kvm_is_user_mode,
+	.get_guest_ip	= kvm_get_guest_ip,
 };
 
 int kvm_perf_init(void)

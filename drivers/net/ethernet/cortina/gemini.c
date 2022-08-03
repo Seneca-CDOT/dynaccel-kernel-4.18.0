@@ -2080,9 +2080,7 @@ static void gmac_get_pauseparam(struct net_device *netdev,
 }
 
 static void gmac_get_ringparam(struct net_device *netdev,
-			       struct ethtool_ringparam *rp,
-			       struct kernel_ethtool_ringparam *kernel_rp,
-			       struct netlink_ext_ack *extack)
+			       struct ethtool_ringparam *rp)
 {
 	struct gemini_ethernet_port *port = netdev_priv(netdev);
 	union gmac_config0 config0;
@@ -2101,9 +2099,7 @@ static void gmac_get_ringparam(struct net_device *netdev,
 }
 
 static int gmac_set_ringparam(struct net_device *netdev,
-			      struct ethtool_ringparam *rp,
-			      struct kernel_ethtool_ringparam *kernel_rp,
-			      struct netlink_ext_ack *extack)
+			      struct ethtool_ringparam *rp)
 {
 	struct gemini_ethernet_port *port = netdev_priv(netdev);
 	int err = 0;

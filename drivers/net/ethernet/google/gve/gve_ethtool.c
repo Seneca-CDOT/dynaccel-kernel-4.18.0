@@ -208,9 +208,7 @@ static int gve_set_channels(struct net_device *netdev,
 }
 
 static void gve_get_ringparam(struct net_device *netdev,
-			      struct ethtool_ringparam *cmd,
-			      struct kernel_ethtool_ringparam *kernel_cmd,
-			      struct netlink_ext_ack *extack)
+			      struct ethtool_ringparam *cmd)
 {
 	struct gve_priv *priv = netdev_priv(netdev);
 

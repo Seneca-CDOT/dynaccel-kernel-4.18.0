@@ -2003,19 +2003,6 @@ config TEST_LKM
 
 	  If unsure, say N.
 
-config TEST_VMALLOC
-	tristate "Test module for stress/performance analysis of vmalloc allocator"
-	default n
-       depends on MMU
-	depends on m
-	help
-	  This builds the "test_vmalloc" module that should be used for
-	  stress and performance analysis. So, any new change for vmalloc
-	  subsystem can be evaluated from performance and stability point
-	  of view.
-
-	  If unsure, say N.
-
 config TEST_USER_COPY
 	tristate "Test user/kernel boundary protections"
 	default n
@@ -2305,19 +2292,6 @@ config TEST_FREE_PAGES
 	  Loading this module is safe if your kernel has the bug fixed.
 	  If the bug is not fixed, it will leak gigabytes of memory and
 	  probably OOM your system.
-
-config TEST_HMM
-	tristate "Test HMM (Heterogeneous Memory Management)"
-	depends on TRANSPARENT_HUGEPAGE
-	depends on DEVICE_PRIVATE
-	select HMM_MIRROR
-	select MMU_NOTIFIER
-	help
-	  This is a pseudo device driver solely for testing HMM.
-	  Say M here if you want to build the HMM test module.
-	  Doing so will allow you to run tools/testing/selftest/vm/hmm-tests.
-
-	  If unsure, say N.
 
 endif # RUNTIME_TESTING_MENU
 

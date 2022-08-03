@@ -13,7 +13,6 @@
 #include <linux/ktime.h>
 #include <linux/genhd.h>
 #include <linux/blk-mq.h>
-#include <linux/jump_label.h>
 
 #include <trace/events/block.h>
 
@@ -31,14 +30,6 @@ struct dm_kobject_holder {
  * DM targets must _not_ deference a mapped_device or dm_table to directly
  * access their members!
  */
-
-/*
- * For mempools pre-allocation at the table loading time.
- */
-struct dm_md_mempools {
-	struct bio_set bs;
-	struct bio_set io_bs;
-};
 
 struct mapped_device {
 	struct mutex suspend_lock;
@@ -99,7 +90,8 @@ struct mapped_device {
 	/*
 	 * io objects are allocated from here.
 	 */
-	struct dm_md_mempools *mempools;
+	struct bio_set io_bs;
+	struct bio_set bs;
 
 	/*
 	 * Processing queue (flush)
@@ -159,10 +151,6 @@ static inline struct dm_stats *dm_get_stats(struct mapped_device *md)
 	return &md->stats;
 }
 
-DECLARE_STATIC_KEY_FALSE(stats_enabled);
-DECLARE_STATIC_KEY_FALSE(swap_bios_enabled);
-DECLARE_STATIC_KEY_FALSE(zoned_enabled);
-
 #define DM_TABLE_MAX_DEPTH 16
 
 struct dm_table {
@@ -207,84 +195,41 @@ struct dm_table {
 /*
  * One of these is allocated per clone bio.
  */
-#define DM_TIO_MAGIC 28714
+#define DM_TIO_MAGIC 7282014
 struct dm_target_io {
-	unsigned short magic;
-	blk_short_t flags;
-	unsigned int target_bio_nr;
+	unsigned int magic;
 	struct dm_io *io;
 	struct dm_target *ti;
+	unsigned int target_bio_nr;
 	unsigned int *len_ptr;
-	sector_t old_sector;
+	bool inside_dm_io;
 	struct bio clone;
 };
-
-/*
- * dm_target_io flags
- */
-enum {
-	DM_TIO_INSIDE_DM_IO,
-	DM_TIO_IS_DUPLICATE_BIO
-};
-
-static inline bool dm_tio_flagged(struct dm_target_io *tio, unsigned int bit)
-{
-	return (tio->flags & (1U << bit)) != 0;
-}
-
-static inline void dm_tio_set_flag(struct dm_target_io *tio, unsigned int bit)
-{
-	tio->flags |= (1U << bit);
-}
-
-static inline bool dm_tio_is_normal(struct dm_target_io *tio)
-{
-	return (dm_tio_flagged(tio, DM_TIO_INSIDE_DM_IO) &&
-		!dm_tio_flagged(tio, DM_TIO_IS_DUPLICATE_BIO));
-}
 
 /*
  * One of these is allocated per original bio.
  * It contains the first clone used for that original.
  */
-#define DM_IO_MAGIC 19577
+#define DM_IO_MAGIC 5191977
 struct dm_io {
-	unsigned short magic;
-	blk_short_t flags;
-	spinlock_t lock;
-	unsigned long start_time;
-	struct dm_stats_aux stats_aux;
+	unsigned int magic;
+	struct mapped_device *md;
 	blk_status_t status;
 	atomic_t io_count;
-	struct mapped_device *md;
-
-	struct bio *split_bio;
-	/* The three fields represent mapped part of original bio */
 	struct bio *orig_bio;
-	unsigned int sector_offset; /* offset to end of orig_bio */
-	unsigned int sectors;
-
+	unsigned long start_time;
+	spinlock_t endio_lock;
+	struct dm_stats_aux stats_aux;
 	/* last member of dm_target_io is 'struct bio' */
 	struct dm_target_io tio;
 };
 
-/*
- * dm_io flags
- */
-enum {
-	DM_IO_ACCOUNTED,
-	DM_IO_WAS_SPLIT
-};
-
-static inline bool dm_io_flagged(struct dm_io *io, unsigned int bit)
+static inline void dm_io_inc_pending(struct dm_io *io)
 {
-	return (io->flags & (1U << bit)) != 0;
+	atomic_inc(&io->io_count);
 }
 
-static inline void dm_io_set_flag(struct dm_io *io, unsigned int bit)
-{
-	io->flags |= (1U << bit);
-}
+void dm_io_dec_pending(struct dm_io *io, blk_status_t error);
 
 static inline struct completion *dm_get_completion_from_kobject(struct kobject *kobj)
 {

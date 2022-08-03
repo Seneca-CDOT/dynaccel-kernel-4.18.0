@@ -349,20 +349,18 @@ static bool mt76x02_tx_hang(struct mt76x02_dev *dev)
 	for (i = 0; i < 4; i++) {
 		q = dev->mphy.q_tx[i];
 
+		if (!q->queued)
+			continue;
+
 		prev_dma_idx = dev->mt76.tx_dma_idx[i];
 		dma_idx = readl(&q->regs->dma_idx);
 		dev->mt76.tx_dma_idx[i] = dma_idx;
 
-		if (!q->queued || prev_dma_idx != dma_idx) {
-			dev->tx_hang_check[i] = 0;
-			continue;
-		}
-
-		if (++dev->tx_hang_check[i] >= MT_TX_HANG_TH)
-			return true;
+		if (prev_dma_idx == dma_idx)
+			break;
 	}
 
-	return false;
+	return i < 4;
 }
 
 static void mt76x02_key_sync(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
@@ -533,13 +531,23 @@ static void mt76x02_check_tx_hang(struct mt76x02_dev *dev)
 	if (test_bit(MT76_RESTART, &dev->mphy.state))
 		return;
 
-	if (!mt76x02_tx_hang(dev) && !dev->mcu_timeout)
-		return;
+	if (mt76x02_tx_hang(dev)) {
+		if (++dev->tx_hang_check >= MT_TX_HANG_TH)
+			goto restart;
+	} else {
+		dev->tx_hang_check = 0;
+	}
 
+	if (dev->mcu_timeout)
+		goto restart;
+
+	return;
+
+restart:
 	mt76x02_watchdog_reset(dev);
 
 	dev->tx_hang_reset++;
-	memset(dev->tx_hang_check, 0, sizeof(dev->tx_hang_check));
+	dev->tx_hang_check = 0;
 	memset(dev->mt76.tx_dma_idx, 0xff,
 	       sizeof(dev->mt76.tx_dma_idx));
 }

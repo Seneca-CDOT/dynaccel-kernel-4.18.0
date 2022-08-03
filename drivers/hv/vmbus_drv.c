@@ -1412,7 +1412,7 @@ static void vmbus_isr(void)
 			tasklet_schedule(&hv_cpu->msg_dpc);
 	}
 
-	add_interrupt_randomness(vmbus_interrupt);
+	add_interrupt_randomness(vmbus_interrupt, 0);
 }
 
 static irqreturn_t vmbus_percpu_isr(int irq, void *dev_id)

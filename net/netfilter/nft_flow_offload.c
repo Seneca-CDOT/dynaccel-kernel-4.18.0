@@ -91,8 +91,7 @@ static void nft_flow_offload_eval(const struct nft_expr *expr,
 	case IPPROTO_TCP:
 		tcph = skb_header_pointer(pkt->skb, pkt->xt.thoff,
 					  sizeof(_tcph), &_tcph);
-		if (unlikely(!tcph || tcph->fin || tcph->rst ||
-			     !nf_conntrack_tcp_established(ct)))
+		if (unlikely(!tcph || tcph->fin || tcph->rst))
 			goto out;
 		break;
 	case IPPROTO_UDP:

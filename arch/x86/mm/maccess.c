@@ -4,6 +4,11 @@
 #include <linux/kernel.h>
 
 #ifdef CONFIG_X86_64
+static __always_inline u64 canonical_address(u64 vaddr, u8 vaddr_bits)
+{
+	return ((s64)vaddr << (64 - vaddr_bits)) >> (64 - vaddr_bits);
+}
+
 static __always_inline bool invalid_probe_range(u64 vaddr)
 {
 	/*
@@ -12,7 +17,7 @@ static __always_inline bool invalid_probe_range(u64 vaddr)
 	 * we also need to include the userspace guard page.
 	 */
 	return vaddr < TASK_SIZE_MAX + PAGE_SIZE ||
-	       !__is_canonical_address(vaddr, boot_cpu_data.x86_virt_bits);
+	       canonical_address(vaddr, boot_cpu_data.x86_virt_bits) != vaddr;
 }
 #else
 static __always_inline bool invalid_probe_range(u64 vaddr)

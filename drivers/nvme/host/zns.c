@@ -164,10 +164,7 @@ static int nvme_zone_parse_entry(struct nvme_ns *ns,
 	zone.len = ns->zsze;
 	zone.capacity = nvme_lba_to_sect(ns, le64_to_cpu(entry->zcap));
 	zone.start = nvme_lba_to_sect(ns, le64_to_cpu(entry->zslba));
-	if (zone.cond == BLK_ZONE_COND_FULL)
-		zone.wp = zone.start + zone.len;
-	else
-		zone.wp = nvme_lba_to_sect(ns, le64_to_cpu(entry->wp));
+	zone.wp = nvme_lba_to_sect(ns, le64_to_cpu(entry->wp));
 
 	return cb(&zone, idx, data);
 }

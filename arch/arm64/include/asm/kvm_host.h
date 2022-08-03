@@ -523,16 +523,6 @@ int io_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa);
 int kvm_perf_init(void);
 int kvm_perf_teardown(void);
 
-/*
- * Returns true if a Performance Monitoring Interrupt (PMI), a.k.a. perf event,
- * arrived in guest context.  For arm64, any event that arrives while a vCPU is
- * loaded is considered to be "in guest".
- */
-static inline bool kvm_arch_pmi_in_guest(struct kvm_vcpu *vcpu)
-{
-	return IS_ENABLED(CONFIG_GUEST_PERF_EVENTS) && !!vcpu;
-}
-
 long kvm_hypercall_pv_features(struct kvm_vcpu *vcpu);
 gpa_t kvm_init_stolen_time(struct kvm_vcpu *vcpu);
 void kvm_update_stolen_time(struct kvm_vcpu *vcpu);
@@ -585,6 +575,7 @@ void kvm_arm_vcpu_ptrauth_trap(struct kvm_vcpu *vcpu);
 static inline void kvm_arch_hardware_unsetup(void) {}
 static inline void kvm_arch_sync_events(struct kvm *kvm) {}
 static inline void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu) {}
+static inline void kvm_arch_vcpu_block_finish(struct kvm_vcpu *vcpu) {}
 
 void kvm_arm_init_debug(void);
 void kvm_arm_vcpu_init_debug(struct kvm_vcpu *vcpu);
@@ -672,6 +663,7 @@ int kvm_set_ipa_limit(void);
 
 #define __KVM_HAVE_ARCH_VM_ALLOC
 struct kvm *kvm_arch_alloc_vm(void);
+void kvm_arch_free_vm(struct kvm *kvm);
 
 int kvm_arm_setup_stage2(struct kvm *kvm, unsigned long type);
 

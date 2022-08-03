@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 /*
- * Copyright (C) 2018-2022 Intel Corporation
+ * Copyright (C) 2018-2021 Intel Corporation
  */
 #include <linux/firmware.h>
 #include "iwl-drv.h"
@@ -59,7 +59,7 @@ dbg_ver_table[IWL_DBG_TLV_TYPE_NUM] = {
 	[IWL_DBG_TLV_TYPE_DEBUG_INFO]	= {.min_ver = 1, .max_ver = 1,},
 	[IWL_DBG_TLV_TYPE_BUF_ALLOC]	= {.min_ver = 1, .max_ver = 1,},
 	[IWL_DBG_TLV_TYPE_HCMD]		= {.min_ver = 1, .max_ver = 1,},
-	[IWL_DBG_TLV_TYPE_REGION]	= {.min_ver = 1, .max_ver = 3,},
+	[IWL_DBG_TLV_TYPE_REGION]	= {.min_ver = 1, .max_ver = 2,},
 	[IWL_DBG_TLV_TYPE_TRIGGER]	= {.min_ver = 1, .max_ver = 1,},
 	[IWL_DBG_TLV_TYPE_CONF_SET]	= {.min_ver = 1, .max_ver = 1,},
 };
@@ -74,8 +74,7 @@ static int iwl_dbg_tlv_add(const struct iwl_ucode_tlv *tlv,
 	if (!node)
 		return -ENOMEM;
 
-	memcpy(&node->tlv, tlv, sizeof(node->tlv));
-	memcpy(node->tlv.data, tlv->data, len);
+	memcpy(&node->tlv, tlv, sizeof(node->tlv) + len);
 	list_add_tail(&node->list, list);
 
 	return 0;
@@ -178,15 +177,15 @@ static int iwl_dbg_tlv_alloc_region(struct iwl_trans *trans,
 	const struct iwl_fw_ini_region_tlv *reg = (const void *)tlv->data;
 	struct iwl_ucode_tlv **active_reg;
 	u32 id = le32_to_cpu(reg->id);
-	u8 type = reg->type;
+	u32 type = le32_to_cpu(reg->type);
 	u32 tlv_len = sizeof(*tlv) + le32_to_cpu(tlv->length);
 
 	/*
-	 * The higher part of the ID from version 2 is debug policy.
-	 * The id will be only lsb 16 bits, so mask it out.
+	 * The higher part of the ID in version 2 is irrelevant for
+	 * us, so mask it out.
 	 */
-	if (le32_to_cpu(reg->hdr.version) >= 2)
-		id &= IWL_FW_INI_REGION_ID_MASK;
+	if (le32_to_cpu(reg->hdr.version) == 2)
+		id &= IWL_FW_INI_REGION_V2_MASK;
 
 	if (le32_to_cpu(tlv->length) < sizeof(*reg))
 		return -EINVAL;
@@ -212,14 +211,6 @@ static int iwl_dbg_tlv_alloc_region(struct iwl_trans *trans,
 		return -EOPNOTSUPP;
 	}
 
-	if (type == IWL_FW_INI_REGION_INTERNAL_BUFFER) {
-		trans->dbg.imr_data.sram_addr =
-			le32_to_cpu(reg->internal_buffer.base_addr);
-		trans->dbg.imr_data.sram_size =
-			le32_to_cpu(reg->internal_buffer.size);
-	}
-
-
 	active_reg = &trans->dbg.active_regions[id];
 	if (*active_reg) {
 		IWL_WARN(trans, "WRT: Overriding region id %u\n", id);
@@ -242,7 +233,6 @@ static int iwl_dbg_tlv_alloc_trigger(struct iwl_trans *trans,
 	const struct iwl_fw_ini_trigger_tlv *trig = (const void *)tlv->data;
 	struct iwl_fw_ini_trigger_tlv *dup_trig;
 	u32 tp = le32_to_cpu(trig->time_point);
-	u32 rf = le32_to_cpu(trig->reset_fw);
 	struct iwl_ucode_tlv *dup = NULL;
 	int ret;
 
@@ -257,10 +247,6 @@ static int iwl_dbg_tlv_alloc_trigger(struct iwl_trans *trans,
 		return -EINVAL;
 	}
 
-	IWL_DEBUG_FW(trans,
-		     "WRT: time point %u for trigger TLV with reset_fw %u\n",
-		     tp, rf);
-	trans->dbg.last_tp_resetfw = 0xFF;
 	if (!le32_to_cpu(trig->occurrences)) {
 		dup = kmemdup(tlv, sizeof(*tlv) + le32_to_cpu(tlv->length),
 				GFP_KERNEL);
@@ -280,7 +266,7 @@ static int iwl_dbg_tlv_alloc_trigger(struct iwl_trans *trans,
 static int iwl_dbg_tlv_config_set(struct iwl_trans *trans,
 				  const struct iwl_ucode_tlv *tlv)
 {
-	const struct iwl_fw_ini_conf_set_tlv *conf_set = (const void *)tlv->data;
+	struct iwl_fw_ini_conf_set_tlv *conf_set = (void *)tlv->data;
 	u32 tp = le32_to_cpu(conf_set->time_point);
 	u32 type = le32_to_cpu(conf_set->set_type);
 
@@ -371,7 +357,7 @@ void iwl_dbg_tlv_del_timers(struct iwl_trans *trans)
 	struct iwl_dbg_tlv_timer_node *node, *tmp;
 
 	list_for_each_entry_safe(node, tmp, timer_list, list) {
-		del_timer_sync(&node->timer);
+		del_timer(&node->timer);
 		list_del(&node->list);
 		kfree(node);
 	}
@@ -469,7 +455,7 @@ static int iwl_dbg_tlv_parse_bin(struct iwl_trans *trans, const u8 *data,
 
 	while (len >= sizeof(*tlv)) {
 		len -= sizeof(*tlv);
-		tlv = (const void *)data;
+		tlv = (void *)data;
 
 		tlv_len = le32_to_cpu(tlv->length);
 
@@ -494,7 +480,7 @@ void iwl_dbg_tlv_load_bin(struct device *dev, struct iwl_trans *trans)
 	int res;
 
 	if (!iwlwifi_mod_params.enable_ini ||
-	    trans->trans_cfg->device_family <= IWL_DEVICE_FAMILY_8000)
+	    trans->trans_cfg->device_family <= IWL_DEVICE_FAMILY_9000)
 		return;
 
 	res = firmware_request_nowarn(&fw, yoyo_bin, dev);
@@ -586,7 +572,8 @@ static int iwl_dbg_tlv_alloc_fragments(struct iwl_fw_runtime *fwrt,
 		return 0;
 
 	num_frags = le32_to_cpu(fw_mon_cfg->max_frags_num);
-	if (fwrt->trans->trans_cfg->device_family < IWL_DEVICE_FAMILY_AX210) {
+	if (!fw_has_capa(&fwrt->fw->ucode_capa,
+			 IWL_UCODE_TLV_CAPA_DBG_BUF_ALLOC_CMD_SUPP)) {
 		if (alloc_id != IWL_FW_INI_ALLOCATION_ID_DBGC1)
 			return -EIO;
 		num_frags = 1;
@@ -770,40 +757,33 @@ static int iwl_dbg_tlv_update_dram(struct iwl_fw_runtime *fwrt,
 
 static void iwl_dbg_tlv_update_drams(struct iwl_fw_runtime *fwrt)
 {
-	int ret, i;
-	bool dram_alloc = false;
+	int ret, i, dram_alloc = 0;
+	struct iwl_dram_info dram_info;
 	struct iwl_dram_data *frags =
 		&fwrt->trans->dbg.fw_mon_ini[IWL_FW_INI_ALLOCATION_ID_DBGC1].frags[0];
-	struct iwl_dram_info *dram_info;
-
-	if (!frags || !frags->block)
-		return;
-
-	dram_info = frags->block;
 
 	if (!fw_has_capa(&fwrt->fw->ucode_capa,
 			 IWL_UCODE_TLV_CAPA_DRAM_FRAG_SUPPORT))
 		return;
 
-	dram_info->first_word = cpu_to_le32(DRAM_INFO_FIRST_MAGIC_WORD);
-	dram_info->second_word = cpu_to_le32(DRAM_INFO_SECOND_MAGIC_WORD);
+	dram_info.first_word = cpu_to_le32(DRAM_INFO_FIRST_MAGIC_WORD);
+	dram_info.second_word = cpu_to_le32(DRAM_INFO_SECOND_MAGIC_WORD);
 
 	for (i = IWL_FW_INI_ALLOCATION_ID_DBGC1;
 	     i <= IWL_FW_INI_ALLOCATION_ID_DBGC3; i++) {
-		ret = iwl_dbg_tlv_update_dram(fwrt, i, dram_info);
+		ret = iwl_dbg_tlv_update_dram(fwrt, i, &dram_info);
 		if (!ret)
-			dram_alloc = true;
+			dram_alloc++;
 		else
 			IWL_WARN(fwrt,
 				 "WRT: Failed to set DRAM buffer for alloc id %d, ret=%d\n",
 				 i, ret);
 	}
-
-	if (dram_alloc)
-		IWL_DEBUG_FW(fwrt, "block data after  %08x\n",
-			     dram_info->first_word);
-	else
-		memset(frags->block, 0, sizeof(*dram_info));
+	if (dram_alloc) {
+		memcpy(frags->block, &dram_info, sizeof(dram_info));
+		IWL_DEBUG_FW(fwrt, "block data after  %016x\n",
+			     *((int *)fwrt->trans->dbg.fw_mon_ini[1].frags[0].block));
+	}
 }
 
 static void iwl_dbg_tlv_send_hcmds(struct iwl_fw_runtime *fwrt,
@@ -826,11 +806,11 @@ static void iwl_dbg_tlv_send_hcmds(struct iwl_fw_runtime *fwrt,
 }
 
 static void iwl_dbg_tlv_apply_config(struct iwl_fw_runtime *fwrt,
-				     struct list_head *conf_list)
+				     struct list_head *config_list)
 {
 	struct iwl_dbg_tlv_node *node;
 
-	list_for_each_entry(node, conf_list, list) {
+	list_for_each_entry(node, config_list, list) {
 		struct iwl_fw_ini_conf_set_tlv *config_list = (void *)node->tlv.data;
 		u32 count, address, value;
 		u32 len = (le32_to_cpu(node->tlv.length) - sizeof(*config_list)) / 8;
@@ -876,17 +856,10 @@ static void iwl_dbg_tlv_apply_config(struct iwl_fw_runtime *fwrt,
 		case IWL_FW_INI_CONFIG_SET_TYPE_DBGC_DRAM_ADDR: {
 			struct iwl_dbgc1_info dram_info = {};
 			struct iwl_dram_data *frags = &fwrt->trans->dbg.fw_mon_ini[1].frags[0];
-			__le64 dram_base_addr;
-			__le32 dram_size;
-			u64 dram_addr;
+			__le64 dram_base_addr = cpu_to_le64(frags->physical);
+			__le32 dram_size = cpu_to_le32(frags->size);
+			u64  dram_addr = le64_to_cpu(dram_base_addr);
 			u32 ret;
-
-			if (!frags)
-				break;
-
-			dram_base_addr = cpu_to_le64(frags->physical);
-			dram_size = cpu_to_le32(frags->size);
-			dram_addr = le64_to_cpu(dram_base_addr);
 
 			IWL_DEBUG_FW(fwrt, "WRT: dram_base_addr 0x%016llx, dram_size 0x%x\n",
 				     dram_base_addr, dram_size);
@@ -1193,8 +1166,6 @@ iwl_dbg_tlv_tp_trigger(struct iwl_fw_runtime *fwrt, bool sync,
 		u32 num_data = iwl_tlv_array_len(&node->tlv, dump_data.trig,
 						 data);
 		int ret, i;
-		u32 tp = le32_to_cpu(dump_data.trig->time_point);
-
 
 		if (!num_data) {
 			ret = iwl_fw_dbg_ini_collect(fwrt, &dump_data, sync);
@@ -1213,42 +1184,8 @@ iwl_dbg_tlv_tp_trigger(struct iwl_fw_runtime *fwrt, bool sync,
 				break;
 			}
 		}
-
-		fwrt->trans->dbg.restart_required = FALSE;
-		IWL_DEBUG_INFO(fwrt, "WRT: tp %d, reset_fw %d\n",
-			       tp, dump_data.trig->reset_fw);
-		IWL_DEBUG_INFO(fwrt, "WRT: restart_required %d, last_tp_resetfw %d\n",
-			       fwrt->trans->dbg.restart_required,
-			       fwrt->trans->dbg.last_tp_resetfw);
-
-		if (fwrt->trans->trans_cfg->device_family ==
-		    IWL_DEVICE_FAMILY_9000) {
-			fwrt->trans->dbg.restart_required = TRUE;
-		} else if (tp == IWL_FW_INI_TIME_POINT_FW_ASSERT &&
-			   fwrt->trans->dbg.last_tp_resetfw ==
-			   IWL_FW_INI_RESET_FW_MODE_STOP_FW_ONLY) {
-			fwrt->trans->dbg.restart_required = FALSE;
-			fwrt->trans->dbg.last_tp_resetfw = 0xFF;
-			IWL_DEBUG_FW(fwrt, "WRT: FW_ASSERT due to reset_fw_mode-no restart\n");
-		} else if (le32_to_cpu(dump_data.trig->reset_fw) ==
-			   IWL_FW_INI_RESET_FW_MODE_STOP_AND_RELOAD_FW) {
-			IWL_DEBUG_INFO(fwrt, "WRT: stop and reload firmware\n");
-			fwrt->trans->dbg.restart_required = TRUE;
-		} else if (le32_to_cpu(dump_data.trig->reset_fw) ==
-			   IWL_FW_INI_RESET_FW_MODE_STOP_FW_ONLY) {
-			IWL_DEBUG_INFO(fwrt, "WRT: stop only and no reload firmware\n");
-			fwrt->trans->dbg.restart_required = FALSE;
-			fwrt->trans->dbg.last_tp_resetfw =
-				le32_to_cpu(dump_data.trig->reset_fw);
-		} else if (le32_to_cpu(dump_data.trig->reset_fw) ==
-			   IWL_FW_INI_RESET_FW_MODE_NOTHING) {
-			IWL_DEBUG_INFO(fwrt,
-				       "WRT: nothing need to be done after debug collection\n");
-		} else {
-			IWL_ERR(fwrt, "WRT: wrong resetfw %d\n",
-				le32_to_cpu(dump_data.trig->reset_fw));
-		}
 	}
+
 	return 0;
 }
 
@@ -1314,7 +1251,7 @@ static void iwl_dbg_tlv_init_cfg(struct iwl_fw_runtime *fwrt)
 		}
 
 		reg = (void *)(*active_reg)->data;
-		reg_type = reg->type;
+		reg_type = le32_to_cpu(reg->type);
 
 		if (reg_type != IWL_FW_INI_REGION_DRAM_BUFFER ||
 		    !(BIT(le32_to_cpu(reg->dram_alloc_id)) & failed_alloc))

@@ -1592,9 +1592,7 @@ static void cxgb4vf_set_msglevel(struct net_device *dev, u32 msglevel)
  * first Queue Set.
  */
 static void cxgb4vf_get_ringparam(struct net_device *dev,
-				  struct ethtool_ringparam *rp,
-				  struct kernel_ethtool_ringparam *kernel_rp,
-				  struct netlink_ext_ack *extack)
+				  struct ethtool_ringparam *rp)
 {
 	const struct port_info *pi = netdev_priv(dev);
 	const struct sge *s = &pi->adapter->sge;
@@ -1617,9 +1615,7 @@ static void cxgb4vf_get_ringparam(struct net_device *dev,
  * device -- after vetting them of course!
  */
 static int cxgb4vf_set_ringparam(struct net_device *dev,
-				 struct ethtool_ringparam *rp,
-				 struct kernel_ethtool_ringparam *kernel_rp,
-				 struct netlink_ext_ack *extack)
+				 struct ethtool_ringparam *rp)
 {
 	const struct port_info *pi = netdev_priv(dev);
 	struct adapter *adapter = pi->adapter;

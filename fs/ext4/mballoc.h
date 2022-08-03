@@ -24,15 +24,19 @@
 #include "ext4.h"
 
 /*
- * mb_debug() dynamic printk msgs could be used to debug mballoc code.
  */
 #ifdef CONFIG_EXT4_DEBUG
-#define mb_debug(sb, fmt, ...)						\
-	pr_debug("[%s/%d] EXT4-fs (%s): (%s, %d): %s: " fmt,		\
-		current->comm, task_pid_nr(current), sb->s_id,		\
-	       __FILE__, __LINE__, __func__, ##__VA_ARGS__)
+extern ushort ext4_mballoc_debug;
+
+#define mb_debug(n, fmt, ...)	                                        \
+do {									\
+	if ((n) <= ext4_mballoc_debug) {				\
+		printk(KERN_DEBUG "(%s, %d): %s: " fmt,			\
+		       __FILE__, __LINE__, __func__, ##__VA_ARGS__);	\
+	}								\
+} while (0)
 #else
-#define mb_debug(sb, fmt, ...)	no_printk(fmt, ##__VA_ARGS__)
+#define mb_debug(n, fmt, ...)	no_printk(fmt, ##__VA_ARGS__)
 #endif
 
 #define EXT4_MB_HISTORY_ALLOC		1	/* allocation */

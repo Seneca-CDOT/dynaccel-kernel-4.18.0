@@ -15,6 +15,7 @@
 
 #define HCALL_REGION_GPA	0xc0000000ULL
 #define HCALL_REGION_SLOT	10
+#define PAGE_SIZE		4096
 
 static struct kvm_vm *vm;
 

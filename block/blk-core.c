@@ -1347,13 +1347,11 @@ EXPORT_SYMBOL(disk_start_io_acct);
 /**
  * bio_start_io_acct_time - start I/O accounting for bio based drivers
  * @bio:	bio to start account for
- * @sectors:	number of sectors to account for
  * @start_time: start time that should be passed back to bio_end_io_acct().
  */
-void bio_start_io_acct_time(struct bio *bio, unsigned int sectors,
-			    unsigned long start_time)
+void bio_start_io_acct_time(struct bio *bio, unsigned long start_time)
 {
-	__part_start_io_acct(&bio->bi_disk->part0, sectors,
+	__part_start_io_acct(&bio->bi_disk->part0, bio_sectors(bio),
 			     bio_op(bio), start_time);
 }
 EXPORT_SYMBOL(bio_start_io_acct_time);

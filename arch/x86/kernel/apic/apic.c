@@ -350,6 +350,8 @@ static void __setup_APIC_LVTT(unsigned int clocks, int oneshot, int irqen)
 		 * According to Intel, MFENCE can do the serialization here.
 		 */
 		asm volatile("mfence" : : : "memory");
+
+		printk_once(KERN_DEBUG "TSC deadline timer enabled\n");
 		return;
 	}
 
@@ -542,7 +544,7 @@ static struct clock_event_device lapic_clockevent = {
 };
 static DEFINE_PER_CPU(struct clock_event_device, lapic_events);
 
-static __init u32 hsx_deadline_rev(void)
+static u32 hsx_deadline_rev(void)
 {
 	switch (boot_cpu_data.x86_stepping) {
 	case 0x02: return 0x3a; /* EP */
@@ -552,7 +554,7 @@ static __init u32 hsx_deadline_rev(void)
 	return ~0U;
 }
 
-static __init u32 bdx_deadline_rev(void)
+static u32 bdx_deadline_rev(void)
 {
 	switch (boot_cpu_data.x86_stepping) {
 	case 0x02: return 0x00000011;
@@ -564,7 +566,7 @@ static __init u32 bdx_deadline_rev(void)
 	return ~0U;
 }
 
-static __init u32 skx_deadline_rev(void)
+static u32 skx_deadline_rev(void)
 {
 	switch (boot_cpu_data.x86_stepping) {
 	case 0x03: return 0x01000136;
@@ -577,7 +579,7 @@ static __init u32 skx_deadline_rev(void)
 	return ~0U;
 }
 
-static const struct x86_cpu_id deadline_match[] __initconst = {
+static const struct x86_cpu_id deadline_match[] = {
 	X86_MATCH_INTEL_FAM6_MODEL( HASWELL_X,		&hsx_deadline_rev),
 	X86_MATCH_INTEL_FAM6_MODEL( BROADWELL_X,	0x0b000020),
 	X86_MATCH_INTEL_FAM6_MODEL( BROADWELL_D,	&bdx_deadline_rev),
@@ -599,19 +601,18 @@ static const struct x86_cpu_id deadline_match[] __initconst = {
 	{},
 };
 
-static __init bool apic_validate_deadline_timer(void)
+static void apic_check_deadline_errata(void)
 {
 	const struct x86_cpu_id *m;
 	u32 rev;
 
-	if (!boot_cpu_has(X86_FEATURE_TSC_DEADLINE_TIMER))
-		return false;
-	if (boot_cpu_has(X86_FEATURE_HYPERVISOR))
-		return true;
+	if (!boot_cpu_has(X86_FEATURE_TSC_DEADLINE_TIMER) ||
+	    boot_cpu_has(X86_FEATURE_HYPERVISOR))
+		return;
 
 	m = x86_match_cpu(deadline_match);
 	if (!m)
-		return true;
+		return;
 
 	/*
 	 * Function pointers will have the MSB set due to address layout,
@@ -623,12 +624,11 @@ static __init bool apic_validate_deadline_timer(void)
 		rev = (u32)m->driver_data;
 
 	if (boot_cpu_data.microcode >= rev)
-		return true;
+		return;
 
 	setup_clear_cpu_cap(X86_FEATURE_TSC_DEADLINE_TIMER);
 	pr_err(FW_BUG "TSC_DEADLINE disabled due to Errata; "
 	       "please update microcode to version: 0x%x (or later)\n", rev);
-	return false;
 }
 
 /*
@@ -2056,8 +2056,7 @@ void __init init_apic_mappings(void)
 {
 	unsigned int new_apicid;
 
-	if (apic_validate_deadline_timer())
-		pr_info("TSC deadline timer available\n");
+	apic_check_deadline_errata();
 
 	if (x2apic_mode) {
 		boot_cpu_physical_apicid = read_apic_id();

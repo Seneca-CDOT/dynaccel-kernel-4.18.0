@@ -1715,9 +1715,7 @@ myri10ge_set_pauseparam(struct net_device *netdev,
 
 static void
 myri10ge_get_ringparam(struct net_device *netdev,
-		       struct ethtool_ringparam *ring,
-		       struct kernel_ethtool_ringparam *kernel_ring,
-		       struct netlink_ext_ack *extack)
+		       struct ethtool_ringparam *ring)
 {
 	struct myri10ge_priv *mgp = netdev_priv(netdev);
 

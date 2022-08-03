@@ -99,24 +99,6 @@ iomap_sector(struct iomap *iomap, loff_t pos)
 }
 
 /*
- * Returns the inline data pointer for logical offset @pos.
- */
-static inline void *iomap_inline_data(struct iomap *iomap, loff_t pos)
-{
-	return iomap->inline_data + pos - iomap->offset;
-}
-
-/*
- * Check if the mapping's length is within the valid range for inline data.
- * This is used to guard against accessing data beyond the page inline_data
- * points at.
- */
-static inline bool iomap_inline_data_valid(struct iomap *iomap)
-{
-	return iomap->length <= PAGE_SIZE - offset_in_page(iomap->inline_data);
-}
-
-/*
  * When a filesystem sets page_ops in an iomap mapping it returns, page_prepare
  * and page_done will be called for each page written to.  This only applies to
  * buffered writes as unbuffered writes will not typically have pages
@@ -127,9 +109,10 @@ static inline bool iomap_inline_data_valid(struct iomap *iomap)
  * associated page could not be obtained.
  */
 struct iomap_page_ops {
-	int (*page_prepare)(struct inode *inode, loff_t pos, unsigned len);
+	int (*page_prepare)(struct inode *inode, loff_t pos, unsigned len,
+			struct iomap *iomap);
 	void (*page_done)(struct inode *inode, loff_t pos, unsigned copied,
-			struct page *page);
+			struct page *page, struct iomap *iomap);
 };
 
 /*
@@ -288,19 +271,12 @@ struct iomap_dio_ops {
   */
 #define IOMAP_DIO_OVERWRITE_ONLY	(1 << 1)
 
-/*
- * When a page fault occurs, return a partial synchronous result and allow
- * the caller to retry the rest of the operation after dealing with the page
- * fault.
- */
-#define IOMAP_DIO_PARTIAL		(1 << 2)
-
 ssize_t iomap_dio_rw(struct kiocb *iocb, struct iov_iter *iter,
 		const struct iomap_ops *ops, const struct iomap_dio_ops *dops,
-		unsigned int dio_flags, size_t done_before);
+		unsigned int dio_flags);
 struct iomap_dio *__iomap_dio_rw(struct kiocb *iocb, struct iov_iter *iter,
 		const struct iomap_ops *ops, const struct iomap_dio_ops *dops,
-		unsigned int dio_flags, size_t done_before);
+		unsigned int dio_flags);
 ssize_t iomap_dio_complete(struct iomap_dio *dio);
 int iomap_dio_iopoll(struct kiocb *kiocb, bool spin);
 

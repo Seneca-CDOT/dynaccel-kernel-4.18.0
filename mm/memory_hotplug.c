@@ -97,14 +97,11 @@ void mem_hotplug_done(void)
 u64 max_mem_size = U64_MAX;
 
 /* add this memory to iomem resource */
-static struct resource *register_memory_resource(u64 start, u64 size,
-						 const char *resource_name)
+static struct resource *register_memory_resource(u64 start, u64 size)
 {
 	struct resource *res;
 	unsigned long flags =  IORESOURCE_SYSTEM_RAM | IORESOURCE_BUSY;
-
-	if (strcmp(resource_name, "System RAM"))
-		flags |= IORESOURCE_SYSRAM_DRIVER_MANAGED;
+	char *resource_name = "System RAM";
 
 	/*
 	 * Make sure value parsed from 'mem=' only restricts memory adding
@@ -396,16 +393,6 @@ int __ref __add_pages(int nid, unsigned long pfn, unsigned long nr_pages,
 	vmemmap_populate_print_last();
 	return err;
 }
-
-#ifdef CONFIG_NUMA
-int __weak memory_add_physaddr_to_nid(u64 start)
-{
-	pr_info_once("Unknown target node for memory at 0x%llx, assuming node 0\n",
-			start);
-	return 0;
-}
-EXPORT_SYMBOL_GPL(memory_add_physaddr_to_nid);
-#endif
 
 /* find the smallest valid pfn in the range [start_pfn, end_pfn) */
 static unsigned long find_smallest_section_pfn(int nid, struct zone *zone,
@@ -952,20 +939,45 @@ static void reset_node_present_pages(pg_data_t *pgdat)
 }
 
 /* we are OK calling __meminit stuff here - we have CONFIG_MEMORY_HOTPLUG */
-static pg_data_t __ref *hotadd_init_pgdat(int nid)
+static pg_data_t __ref *hotadd_new_pgdat(int nid, u64 start)
 {
 	struct pglist_data *pgdat;
+	unsigned long start_pfn = PFN_DOWN(start);
 
-	/*
-	 * NODE_DATA is preallocated (free_area_init) but its internal
-	 * state is not allocated completely. Add missing pieces.
-	 * Completely offline nodes stay around and they just need
-	 * reintialization.
-	 */
 	pgdat = NODE_DATA(nid);
+	if (!pgdat) {
+		pgdat = arch_alloc_nodedata(nid);
+		if (!pgdat)
+			return NULL;
+
+		pgdat->per_cpu_nodestats =
+			alloc_percpu(struct per_cpu_nodestat);
+		arch_refresh_nodedata(nid, pgdat);
+	} else {
+		int cpu;
+		/*
+		 * Reset the nr_zones, order and highest_zoneidx before reuse.
+		 * Note that kswapd will init kswapd_highest_zoneidx properly
+		 * when it starts in the near future.
+		 */
+		pgdat->nr_zones = 0;
+		pgdat->kswapd_order = 0;
+		pgdat->kswapd_highest_zoneidx = 0;
+		for_each_online_cpu(cpu) {
+			struct per_cpu_nodestat *p;
+
+			p = per_cpu_ptr(pgdat->per_cpu_nodestats, cpu);
+			memset(p, 0, sizeof(*p));
+		}
+	}
+
+	/* we can use NODE_DATA(nid) from here */
+
+	pgdat->node_id = nid;
+	pgdat->node_start_pfn = start_pfn;
 
 	/* init node's zones as empty zones, we don't have any present pages.*/
-	free_area_init_core_hotplug(pgdat);
+	free_area_init_core_hotplug(nid);
 
 	/*
 	 * The node we allocated has no zone fallback lists. For avoiding
@@ -977,7 +989,6 @@ static pg_data_t __ref *hotadd_init_pgdat(int nid)
 	 * When memory is hot-added, all the memory is in offline state. So
 	 * clear all zones' present_pages because they will be updated in
 	 * online_pages() and offline_pages().
-	 * TODO: should be in free_area_init_core_hotplug?
 	 */
 	reset_node_managed_pages(pgdat);
 	reset_node_present_pages(pgdat);
@@ -985,9 +996,20 @@ static pg_data_t __ref *hotadd_init_pgdat(int nid)
 	return pgdat;
 }
 
-/*
- * __try_online_node - online a node if offlined
+static void rollback_node_hotadd(int nid)
+{
+	pg_data_t *pgdat = NODE_DATA(nid);
+
+	arch_refresh_nodedata(nid, NULL);
+	free_percpu(pgdat->per_cpu_nodestats);
+	arch_free_nodedata(pgdat);
+}
+
+
+/**
+ * try_online_node - online a node if offlined
  * @nid: the node ID
+ * @start: start addr of the node
  * @set_node_online: Whether we want to online the node
  * called by cpu_up() to online a node without onlined memory.
  *
@@ -996,7 +1018,7 @@ static pg_data_t __ref *hotadd_init_pgdat(int nid)
  * 0 -> the node is already online
  * -ENOMEM -> the node could not be allocated
  */
-static int __try_online_node(int nid, bool set_node_online)
+static int __try_online_node(int nid, u64 start, bool set_node_online)
 {
 	pg_data_t *pgdat;
 	int ret = 1;
@@ -1004,7 +1026,7 @@ static int __try_online_node(int nid, bool set_node_online)
 	if (node_online(nid))
 		return 0;
 
-	pgdat = hotadd_init_pgdat(nid);
+	pgdat = hotadd_new_pgdat(nid, start);
 	if (!pgdat) {
 		pr_err("Cannot online node %d due to NULL pgdat\n", nid);
 		ret = -ENOMEM;
@@ -1028,7 +1050,7 @@ int try_online_node(int nid)
 	int ret;
 
 	mem_hotplug_begin();
-	ret =  __try_online_node(nid, true);
+	ret =  __try_online_node(nid, 0, true);
 	mem_hotplug_done();
 	return ret;
 }
@@ -1074,13 +1096,15 @@ int __ref add_memory_resource(int nid, struct resource *res)
 
 	mem_hotplug_begin();
 
-	if (IS_ENABLED(CONFIG_ARCH_KEEP_MEMBLOCK)) {
-		ret = memblock_add_node(start, size, nid);
-		if (ret)
-			goto error_mem_hotplug_end;
-	}
+	/*
+	 * Add new range to memblock so that when hotadd_new_pgdat() is called
+	 * to allocate new pgdat, get_pfn_range_for_nid() will be able to find
+	 * this new range and calculate total pages correctly.  The range will
+	 * be removed at hot-remove time.
+	 */
+	memblock_add_node(start, size, nid);
 
-	ret = __try_online_node(nid, false);
+	ret = __try_online_node(nid, start, false);
 	if (ret < 0)
 		goto error;
 	new_node = ret;
@@ -1113,8 +1137,7 @@ int __ref add_memory_resource(int nid, struct resource *res)
 			  MEMINIT_HOTPLUG);
 
 	/* create new memmap entry */
-	if (!strcmp(res->name, "System RAM"))
-		firmware_map_add_hotplug(start, start + size, "System RAM");
+	firmware_map_add_hotplug(start, start + size, "System RAM");
 
 	/* device_online() will take the lock when calling online_pages() */
 	mem_hotplug_done();
@@ -1125,9 +1148,10 @@ int __ref add_memory_resource(int nid, struct resource *res)
 
 	return ret;
 error:
-	if (IS_ENABLED(CONFIG_ARCH_KEEP_MEMBLOCK))
-		memblock_remove(start, size);
-error_mem_hotplug_end:
+	/* rollback pgdat allocation and others */
+	if (new_node)
+		rollback_node_hotadd(nid);
+	memblock_remove(start, size);
 	mem_hotplug_done();
 	return ret;
 }
@@ -1138,7 +1162,7 @@ int __ref __add_memory(int nid, u64 start, u64 size)
 	struct resource *res;
 	int ret;
 
-	res = register_memory_resource(start, size, "System RAM");
+	res = register_memory_resource(start, size);
 	if (IS_ERR(res))
 		return PTR_ERR(res);
 
@@ -1159,56 +1183,6 @@ int add_memory(int nid, u64 start, u64 size)
 	return rc;
 }
 EXPORT_SYMBOL_GPL(add_memory);
-
-/*
- * Add special, driver-managed memory to the system as system RAM. Such
- * memory is not exposed via the raw firmware-provided memmap as system
- * RAM, instead, it is detected and added by a driver - during cold boot,
- * after a reboot, and after kexec.
- *
- * Reasons why this memory should not be used for the initial memmap of a
- * kexec kernel or for placing kexec images:
- * - The booting kernel is in charge of determining how this memory will be
- *   used (e.g., use persistent memory as system RAM)
- * - Coordination with a hypervisor is required before this memory
- *   can be used (e.g., inaccessible parts).
- *
- * For this memory, no entries in /sys/firmware/memmap ("raw firmware-provided
- * memory map") are created. Also, the created memory resource is flagged
- * with IORESOURCE_SYSRAM_DRIVER_MANAGED, so in-kernel users can special-case
- * this memory as well (esp., not place kexec images onto it).
- *
- * The resource_name (visible via /proc/iomem) has to have the format
- * "System RAM ($DRIVER)".
- */
-int add_memory_driver_managed(int nid, u64 start, u64 size,
-			      const char *resource_name)
-{
-	struct resource *res;
-	int rc;
-
-	if (!resource_name ||
-	    strstr(resource_name, "System RAM (") != resource_name ||
-	    resource_name[strlen(resource_name) - 1] != ')')
-		return -EINVAL;
-
-	lock_device_hotplug();
-
-	res = register_memory_resource(start, size, resource_name);
-	if (IS_ERR(res)) {
-		rc = PTR_ERR(res);
-		goto out_unlock;
-	}
-
-	rc = add_memory_resource(nid, res);
-	if (rc < 0)
-		release_memory_resource(res);
-
-out_unlock:
-	unlock_device_hotplug();
-	return rc;
-}
-EXPORT_SYMBOL_GPL(add_memory_driver_managed);
 
 #ifdef CONFIG_MEMORY_HOTREMOVE
 /*
@@ -1783,6 +1757,8 @@ static int __ref try_remove_memory(int nid, u64 start, u64 size)
 
 	/* remove memmap entry */
 	firmware_map_remove(start, start + size, "System RAM");
+	memblock_free(start, size);
+	memblock_remove(start, size);
 
 	/*
 	 * Memory block device removal under the device_hotplug_lock is
@@ -1793,12 +1769,6 @@ static int __ref try_remove_memory(int nid, u64 start, u64 size)
 	mem_hotplug_begin();
 
 	arch_remove_memory(nid, start, size, NULL);
-
-	if (IS_ENABLED(CONFIG_ARCH_KEEP_MEMBLOCK)) {
-		memblock_free(start, size);
-		memblock_remove(start, size);
-	}
-
 	__release_memory_resource(start, size);
 
 	try_offline_node(nid);

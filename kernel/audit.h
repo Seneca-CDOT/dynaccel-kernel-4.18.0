@@ -1,4 +1,4 @@
-/* audit -- definition of audit_context structure and supporting types
+/* audit -- definition of audit_context structure and supporting types 
  *
  * Copyright 2003-2004 Red Hat, Inc.
  * Copyright 2005 Hewlett-Packard Development Company, L.P.
@@ -19,9 +19,6 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef _KERNEL_AUDIT_H_
-#define _KERNEL_AUDIT_H_
-
 #include <linux/fs.h>
 #include <linux/audit.h>
 #include <linux/skbuff.h>
@@ -38,16 +35,16 @@
    a per-task filter.  At syscall entry, the audit_state is augmented by
    the syscall filter. */
 enum audit_state {
-	RH_KABI_RENAME(AUDIT_DISABLED,AUDIT_STATE_DISABLED),	/* Do not create per-task audit_context.
+	AUDIT_DISABLED,		/* Do not create per-task audit_context.
 				 * No syscall-specific audit records can
 				 * be generated. */
-	RH_KABI_RENAME(AUDIT_BUILD_CONTEXT,AUDIT_STATE_BUILD),	/* Create the per-task audit_context,
+	AUDIT_BUILD_CONTEXT,	/* Create the per-task audit_context,
 				 * and fill it in at syscall
 				 * entry time.  This makes a full
 				 * syscall record available if some
 				 * other part of the kernel decides it
 				 * should be recorded. */
-	RH_KABI_RENAME(AUDIT_RECORD_CONTEXT,AUDIT_STATE_RECORD)	/* Create the per-task audit_context,
+	AUDIT_RECORD_CONTEXT	/* Create the per-task audit_context,
 				 * always fill it in at syscall entry
 				 * time, and always write out the audit
 				 * record at syscall exit time.  */
@@ -111,15 +108,10 @@ struct audit_proctitle {
 	char	*value;	/* the cmdline field */
 };
 
-enum audit_context_status {
-		AUDIT_CTX_UNUSED,	/* audit_context is currently unused */
-		AUDIT_CTX_SYSCALL,	/* in use by syscall */
-};
-
 /* The per-task audit context. */
 struct audit_context {
 	int		    dummy;	/* must be the first element */
-	RH_KABI_REPLACE(int in_syscall,enum audit_context_status context)
+	int		    in_syscall;	/* 1 if task is in a syscall */
 	enum audit_state    state, current_state;
 	unsigned int	    serial;     /* serial number for record */
 	int		    major;      /* syscall number */
@@ -214,10 +206,6 @@ struct audit_context {
 		struct {
 			char			*name;
 		} module;
-		RH_KABI_EXTEND(struct {
-			struct audit_ntp_data	ntp_data;
-			struct timespec64	tk_injoffset;
-		} time)
 	};
 	int fds[2];
 	struct audit_proctitle proctitle;
@@ -345,13 +333,13 @@ extern struct list_head *audit_killed_trees(void);
 #define audit_tree_path(rule) ""	/* never called */
 #define audit_kill_trees(context) BUG()
 
-#define audit_signal_info(s, t) 0
+#define audit_signal_info(s, t) AUDIT_DISABLED
 static inline int audit_signal_info_syscall(struct task_struct *t)
 {
 	return 0;
 }
 
-#define audit_filter_inodes(t, c) AUDIT_STATE_DISABLED
+#define audit_filter_inodes(t, c) AUDIT_DISABLED
 #endif /* CONFIG_AUDITSYSCALL */
 
 extern char *audit_unpack_string(void **bufp, size_t *remain, size_t len);
@@ -360,5 +348,3 @@ extern int audit_filter(int msgtype, unsigned int listtype);
 
 extern void audit_ctl_lock(void);
 extern void audit_ctl_unlock(void);
-
-#endif

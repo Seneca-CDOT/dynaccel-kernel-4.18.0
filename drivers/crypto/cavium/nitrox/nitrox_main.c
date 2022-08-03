@@ -210,7 +210,7 @@ void nitrox_put_device(struct nitrox_device *ndev)
 	smp_mb__after_atomic();
 }
 
-static int nitrox_device_flr(struct pci_dev *pdev)
+static int nitrox_reset_device(struct pci_dev *pdev)
 {
 	int pos = 0;
 
@@ -220,8 +220,15 @@ static int nitrox_device_flr(struct pci_dev *pdev)
 		return -ENOMEM;
 	}
 
-	pcie_reset_flr(pdev, PCI_RESET_DO_RESET);
+	pos = pci_pcie_cap(pdev);
+	if (!pos)
+		return -ENOTTY;
 
+	if (!pci_wait_for_pending_transaction(pdev))
+		dev_err(&pdev->dev, "waiting for pending transaction\n");
+
+	pcie_capability_set_word(pdev, PCI_EXP_DEVCTL, PCI_EXP_DEVCTL_BCR_FLR);
+	msleep(100);
 	pci_restore_state(pdev);
 
 	return 0;
@@ -480,7 +487,7 @@ static int nitrox_probe(struct pci_dev *pdev,
 		return err;
 
 	/* do FLR */
-	err = nitrox_device_flr(pdev);
+	err = nitrox_reset_device(pdev);
 	if (err) {
 		dev_err(&pdev->dev, "FLR failed\n");
 		pci_disable_device(pdev);

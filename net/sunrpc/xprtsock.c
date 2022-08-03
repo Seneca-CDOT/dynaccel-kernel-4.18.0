@@ -91,11 +91,6 @@ static unsigned int xprt_max_resvport_limit = RPC_MAX_RESVPORT;
 
 static struct ctl_table_header *sunrpc_table_header;
 
-static struct xprt_class xs_local_transport;
-static struct xprt_class xs_udp_transport;
-static struct xprt_class xs_tcp_transport;
-static struct xprt_class xs_bc_tcp_transport;
-
 /*
  * FIXME: changing the UDP slot table size should also resize the UDP
  *        socket buffers for existing UDP transports
@@ -1650,36 +1645,6 @@ static int xs_get_srcport(struct sock_xprt *transport)
 	return port;
 }
 
-static unsigned short xs_sock_srcport(struct rpc_xprt *xprt)
-{
-	struct sock_xprt *sock = container_of(xprt, struct sock_xprt, xprt);
-	unsigned short ret = 0;
-	mutex_lock(&sock->recv_mutex);
-	if (sock->sock)
-		ret = xs_sock_getport(sock->sock);
-	mutex_unlock(&sock->recv_mutex);
-	return ret;
-}
-
-static int xs_sock_srcaddr(struct rpc_xprt *xprt, char *buf, size_t buflen)
-{
-	struct sock_xprt *sock = container_of(xprt, struct sock_xprt, xprt);
-	union {
-		struct sockaddr sa;
-		struct sockaddr_storage st;
-	} saddr;
-	int ret = -ENOTCONN;
-
-	mutex_lock(&sock->recv_mutex);
-	if (sock->sock) {
-		ret = kernel_getsockname(sock->sock, &saddr.sa);
-		if (ret >= 0)
-			ret = snprintf(buf, buflen, "%pISc", &saddr.sa);
-	}
-	mutex_unlock(&sock->recv_mutex);
-	return ret;
-}
-
 static unsigned short xs_next_srcport(struct sock_xprt *transport, unsigned short port)
 {
 	if (transport->srcport != 0)
@@ -2653,8 +2618,6 @@ static const struct rpc_xprt_ops xs_udp_ops = {
 	.rpcbind		= rpcb_getport_async,
 	.set_port		= xs_set_port,
 	.connect		= xs_connect,
-	.get_srcaddr		= xs_sock_srcaddr,
-	.get_srcport		= xs_sock_srcport,
 	.buf_alloc		= rpc_malloc,
 	.buf_free		= rpc_free,
 	.send_request		= xs_udp_send_request,
@@ -2677,8 +2640,6 @@ static const struct rpc_xprt_ops xs_tcp_ops = {
 	.rpcbind		= rpcb_getport_async,
 	.set_port		= xs_set_port,
 	.connect		= xs_connect,
-	.get_srcaddr		= xs_sock_srcaddr,
-	.get_srcport		= xs_sock_srcport,
 	.buf_alloc		= rpc_malloc,
 	.buf_free		= rpc_free,
 	.prepare_request	= xs_stream_prepare_request,
@@ -2813,7 +2774,6 @@ static struct rpc_xprt *xs_setup_local(struct xprt_create *args)
 	transport = container_of(xprt, struct sock_xprt, xprt);
 
 	xprt->prot = 0;
-	xprt->xprt_class = &xs_local_transport;
 	xprt->max_payload = RPC_MAX_FRAGMENT_SIZE;
 
 	xprt->bind_timeout = XS_BIND_TO;
@@ -2883,7 +2843,6 @@ static struct rpc_xprt *xs_setup_udp(struct xprt_create *args)
 	transport = container_of(xprt, struct sock_xprt, xprt);
 
 	xprt->prot = IPPROTO_UDP;
-	xprt->xprt_class = &xs_udp_transport;
 	/* XXX: header size can vary due to auth type, IPv6, etc. */
 	xprt->max_payload = (1U << 16) - (MAX_HEADER << 3);
 
@@ -2964,7 +2923,6 @@ static struct rpc_xprt *xs_setup_tcp(struct xprt_create *args)
 	transport = container_of(xprt, struct sock_xprt, xprt);
 
 	xprt->prot = IPPROTO_TCP;
-	xprt->xprt_class = &xs_tcp_transport;
 	xprt->max_payload = RPC_MAX_FRAGMENT_SIZE;
 
 	xprt->bind_timeout = XS_BIND_TO;
@@ -3038,7 +2996,6 @@ static struct rpc_xprt *xs_setup_bc_tcp(struct xprt_create *args)
 	transport = container_of(xprt, struct sock_xprt, xprt);
 
 	xprt->prot = IPPROTO_TCP;
-	xprt->xprt_class = &xs_bc_tcp_transport;
 	xprt->max_payload = RPC_MAX_FRAGMENT_SIZE;
 	xprt->timeout = &xs_tcp_default_timeout;
 

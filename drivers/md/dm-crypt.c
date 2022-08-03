@@ -37,7 +37,6 @@
 #include <linux/key-type.h>
 #include <keys/user-type.h>
 #include <keys/encrypted-type.h>
-#include <keys/trusted-type.h>
 
 #include <linux/device-mapper.h>
 
@@ -1831,8 +1830,6 @@ static void clone_init(struct dm_crypt_io *io, struct bio *clone)
 	clone->bi_opf	  = io->base_bio->bi_opf;
 }
 
-#define CRYPT_MAP_READ_GFP GFP_NOWAIT
-
 static int kcryptd_io_read(struct dm_crypt_io *io, gfp_t gfp)
 {
 	struct crypt_config *cc = io->cc;
@@ -1859,7 +1856,7 @@ static int kcryptd_io_read(struct dm_crypt_io *io, gfp_t gfp)
 		return 1;
 	}
 
-	dm_submit_bio_remap(io->base_bio, clone);
+	generic_make_request(clone);
 	return 0;
 }
 
@@ -1885,7 +1882,7 @@ static void kcryptd_io_write(struct dm_crypt_io *io)
 {
 	struct bio *clone = io->ctx.bio_out;
 
-	dm_submit_bio_remap(io->base_bio, clone);
+	generic_make_request(clone);
 }
 
 #define crypt_io_from_node(node) rb_entry((node), struct dm_crypt_io, rb_node)
@@ -1964,7 +1961,7 @@ static void kcryptd_crypt_write_io_submit(struct dm_crypt_io *io, int async)
 
 	if ((likely(!async) && test_bit(DM_CRYPT_NO_OFFLOAD, &cc->flags)) ||
 	    test_bit(DM_CRYPT_NO_WRITE_WORKQUEUE, &cc->flags)) {
-		dm_submit_bio_remap(io->base_bio, clone);
+		generic_make_request(clone);
 		return;
 	}
 
@@ -2394,6 +2391,7 @@ static int set_key_user(struct crypt_config *cc, struct key *key)
 	return 0;
 }
 
+#if defined(CONFIG_ENCRYPTED_KEYS) || defined(CONFIG_ENCRYPTED_KEYS_MODULE)
 static int set_key_encrypted(struct crypt_config *cc, struct key *key)
 {
 	const struct encrypted_key_payload *ekp;
@@ -2409,22 +2407,7 @@ static int set_key_encrypted(struct crypt_config *cc, struct key *key)
 
 	return 0;
 }
-
-static int set_key_trusted(struct crypt_config *cc, struct key *key)
-{
-	const struct trusted_key_payload *tkp;
-
-	tkp = key->payload.data[0];
-	if (!tkp)
-		return -EKEYREVOKED;
-
-	if (cc->key_size != tkp->key_len)
-		return -EINVAL;
-
-	memcpy(cc->key, tkp->key, cc->key_size);
-
-	return 0;
-}
+#endif /* CONFIG_ENCRYPTED_KEYS */
 
 static int crypt_set_keyring_key(struct crypt_config *cc, const char *key_string)
 {
@@ -2454,14 +2437,11 @@ static int crypt_set_keyring_key(struct crypt_config *cc, const char *key_string
 	} else if (!strncmp(key_string, "user:", key_desc - key_string + 1)) {
 		type = &key_type_user;
 		set_key = set_key_user;
-	} else if (IS_ENABLED(CONFIG_ENCRYPTED_KEYS) &&
-		   !strncmp(key_string, "encrypted:", key_desc - key_string + 1)) {
+#if defined(CONFIG_ENCRYPTED_KEYS) || defined(CONFIG_ENCRYPTED_KEYS_MODULE)
+	} else if (!strncmp(key_string, "encrypted:", key_desc - key_string + 1)) {
 		type = &key_type_encrypted;
 		set_key = set_key_encrypted;
-	} else if (IS_ENABLED(CONFIG_TRUSTED_KEYS) &&
-	           !strncmp(key_string, "trusted:", key_desc - key_string + 1)) {
-		type = &key_type_trusted;
-		set_key = set_key_trusted;
+#endif
 	} else {
 		return -EINVAL;
 	}
@@ -2536,7 +2516,7 @@ static int crypt_set_keyring_key(struct crypt_config *cc, const char *key_string
 
 static int get_key_size(char **key_string)
 {
-	return (*key_string[0] == ':') ? -EINVAL : (int)(strlen(*key_string) >> 1);
+	return (*key_string[0] == ':') ? -EINVAL : strlen(*key_string) >> 1;
 }
 
 #endif /* CONFIG_KEYS */
@@ -3279,7 +3259,6 @@ static int crypt_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 
 	ti->num_flush_bios = 1;
 	ti->limit_swap_bios = true;
-	ti->accounts_remapped_io = true;
 
 	return 0;
 
@@ -3346,17 +3325,12 @@ static int crypt_map(struct dm_target *ti, struct bio *bio)
 		io->ctx.r.req = (struct skcipher_request *)(io + 1);
 
 	if (bio_data_dir(io->base_bio) == READ) {
-		if (kcryptd_io_read(io, CRYPT_MAP_READ_GFP))
+		if (kcryptd_io_read(io, GFP_NOWAIT))
 			kcryptd_queue_read(io);
 	} else
 		kcryptd_queue_crypt(io);
 
 	return DM_MAPIO_SUBMITTED;
-}
-
-static char hex2asc(unsigned char c)
-{
-	return c + '0' + ((unsigned)(9 - c) >> 4 & 0x27);
 }
 
 static void crypt_status(struct dm_target *ti, status_type_t type,
@@ -3377,12 +3351,9 @@ static void crypt_status(struct dm_target *ti, status_type_t type,
 		if (cc->key_size > 0) {
 			if (cc->key_string)
 				DMEMIT(":%u:%s", cc->key_size, cc->key_string);
-			else {
-				for (i = 0; i < cc->key_size; i++) {
-					DMEMIT("%c%c", hex2asc(cc->key[i] >> 4),
-					       hex2asc(cc->key[i] & 0xf));
-				}
-			}
+			else
+				for (i = 0; i < cc->key_size; i++)
+					DMEMIT("%02x", cc->key[i]);
 		} else
 			DMEMIT("-");
 
@@ -3522,7 +3493,7 @@ static void crypt_io_hints(struct dm_target *ti, struct queue_limits *limits)
 
 static struct target_type crypt_target = {
 	.name   = "crypt",
-	.version = {1, 24, 0},
+	.version = {1, 22, 0},
 	.module = THIS_MODULE,
 	.ctr    = crypt_ctr,
 	.dtr    = crypt_dtr,

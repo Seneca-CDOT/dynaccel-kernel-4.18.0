@@ -19,7 +19,6 @@ s390 Architecture
     zfcpdump
     dasd
     common_io
-    pci
 
     text_files
 

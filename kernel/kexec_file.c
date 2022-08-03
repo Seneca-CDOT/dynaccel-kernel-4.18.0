@@ -520,11 +520,6 @@ static int locate_mem_hole_callback(struct resource *res, void *arg)
 	unsigned long sz = end - start + 1;
 
 	/* Returning 0 will take to next memory range */
-
-	/* Don't use memory that will be detected and handled by a driver. */
-	if (res->flags & IORESOURCE_SYSRAM_DRIVER_MANAGED)
-		return 0;
-
 	if (sz < kbuf->memsz)
 		return 0;
 
@@ -540,7 +535,13 @@ static int locate_mem_hole_callback(struct resource *res, void *arg)
 	return locate_mem_hole_bottom_up(start, end, kbuf);
 }
 
-#ifdef CONFIG_ARCH_KEEP_MEMBLOCK
+#ifdef CONFIG_ARCH_DISCARD_MEMBLOCK
+static int kexec_walk_memblock(struct kexec_buf *kbuf,
+			       int (*func)(struct resource *, void *))
+{
+	return 0;
+}
+#else
 static int kexec_walk_memblock(struct kexec_buf *kbuf,
 			       int (*func)(struct resource *, void *))
 {
@@ -584,12 +585,6 @@ static int kexec_walk_memblock(struct kexec_buf *kbuf,
 
 	return ret;
 }
-#else
-static int kexec_walk_memblock(struct kexec_buf *kbuf,
-			       int (*func)(struct resource *, void *))
-{
-	return 0;
-}
 #endif
 
 /**
@@ -629,7 +624,7 @@ int kexec_locate_mem_hole(struct kexec_buf *kbuf)
 	if (kbuf->mem != KEXEC_BUF_MEM_UNKNOWN)
 		return 0;
 
-	if (!IS_ENABLED(CONFIG_ARCH_KEEP_MEMBLOCK))
+	if (IS_ENABLED(CONFIG_ARCH_DISCARD_MEMBLOCK))
 		ret = kexec_walk_resources(kbuf, locate_mem_hole_callback);
 	else
 		ret = kexec_walk_memblock(kbuf, locate_mem_hole_callback);

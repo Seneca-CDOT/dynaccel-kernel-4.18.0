@@ -23,7 +23,7 @@
 #include <asm/apic.h>
 #include <asm/irq_remapping.h>
 
-static struct irq_domain *x86_pci_msi_default_domain __ro_after_init;
+static struct irq_domain *msi_default_domain;
 
 static void irq_msi_update_msg(struct irq_data *irqd, struct irq_cfg *cfg)
 {
@@ -166,7 +166,7 @@ int native_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
 
 	domain = irq_remapping_get_irq_domain(&info);
 	if (domain == NULL)
-		domain = x86_pci_msi_default_domain;
+		domain = msi_default_domain;
 	if (domain == NULL)
 		return -ENOSYS;
 
@@ -224,32 +224,24 @@ static struct msi_domain_info pci_msi_domain_info = {
 	.handler_name	= "edge",
 };
 
-struct irq_domain * __init native_create_pci_msi_domain(void)
+void __init arch_init_msi_domain(struct irq_domain *parent)
 {
 	struct fwnode_handle *fn;
-	struct irq_domain *d;
 
 	if (disable_apic)
-		return NULL;
+		return;
 
 	fn = irq_domain_alloc_named_fwnode("PCI-MSI");
-	if (!fn)
-		return NULL;
-
-	d = pci_msi_create_irq_domain(fn, &pci_msi_domain_info,
-				      x86_vector_domain);
-	if (!d) {
+	if (fn) {
+		msi_default_domain =
+			pci_msi_create_irq_domain(fn, &pci_msi_domain_info,
+						  parent);
 		irq_domain_free_fwnode(fn);
-		pr_warn("Failed to initialize PCI-MSI irqdomain.\n");
-	} else {
-		d->flags |= IRQ_DOMAIN_MSI_NOMASK_QUIRK;
 	}
-	return d;
-}
-
-void __init x86_create_pci_msi_domain(void)
-{
-	x86_pci_msi_default_domain = x86_init.irqs.create_pci_msi_domain();
+	if (!msi_default_domain)
+		pr_warn("failed to initialize irqdomain for MSI/MSI-x.\n");
+	else
+		msi_default_domain->flags |= IRQ_DOMAIN_MSI_NOMASK_QUIRK;
 }
 
 #ifdef CONFIG_IRQ_REMAP
@@ -282,8 +274,7 @@ struct irq_domain *arch_create_remap_msi_irq_domain(struct irq_domain *parent,
 	if (!fn)
 		return NULL;
 	d = pci_msi_create_irq_domain(fn, &pci_msi_ir_domain_info, parent);
-	if (!d)
-		irq_domain_free_fwnode(fn);
+	irq_domain_free_fwnode(fn);
 	return d;
 }
 #endif
@@ -357,8 +348,7 @@ static struct irq_domain *dmar_get_irq_domain(void)
 	if (fn) {
 		dmar_domain = msi_create_irq_domain(fn, &dmar_msi_domain_info,
 						    x86_vector_domain);
-		if (!dmar_domain)
-			irq_domain_free_fwnode(fn);
+		irq_domain_free_fwnode(fn);
 	}
 out:
 	mutex_unlock(&dmar_lock);
@@ -482,10 +472,7 @@ struct irq_domain *hpet_create_irq_domain(int hpet_id)
 	}
 
 	d = msi_create_irq_domain(fn, domain_info, parent);
-	if (!d) {
-		irq_domain_free_fwnode(fn);
-		kfree(domain_info);
-	}
+	irq_domain_free_fwnode(fn);
 	return d;
 }
 

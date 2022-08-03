@@ -36,10 +36,9 @@
 #undef pr_fmt
 #define pr_fmt(fmt) "EINJ: " fmt
 
-#define SLEEP_UNIT_MIN		1000			/* 1ms */
-#define SLEEP_UNIT_MAX		5000			/* 5ms */
-/* Firmware should respond within 1 seconds */
-#define FIRMWARE_TIMEOUT	(1 * USEC_PER_SEC)
+#define SPIN_UNIT		100			/* 100ns */
+/* Firmware should respond within 1 milliseconds */
+#define FIRMWARE_TIMEOUT	(1 * NSEC_PER_MSEC)
 #define ACPI5_VENDOR_BIT	BIT(31)
 #define MEM_ERROR_MASK		(ACPI_EINJ_MEMORY_CORRECTABLE | \
 				ACPI_EINJ_MEMORY_UNCORRECTABLE | \
@@ -180,13 +179,13 @@ static int einj_get_available_error_type(u32 *type)
 
 static int einj_timedout(u64 *t)
 {
-	if ((s64)*t < SLEEP_UNIT_MIN) {
+	if ((s64)*t < SPIN_UNIT) {
 		pr_warn(FW_WARN "Firmware does not respond in time\n");
 		return 1;
 	}
-	*t -= SLEEP_UNIT_MIN;
-	usleep_range(SLEEP_UNIT_MIN, SLEEP_UNIT_MAX);
-
+	*t -= SPIN_UNIT;
+	ndelay(SPIN_UNIT);
+	touch_nmi_watchdog();
 	return 0;
 }
 

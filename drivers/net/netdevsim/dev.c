@@ -56,22 +56,6 @@ static inline unsigned int nsim_dev_port_index_to_vf_index(unsigned int port_ind
 
 static struct dentry *nsim_dev_ddir;
 
-unsigned int nsim_dev_get_vfs(struct nsim_dev *nsim_dev)
-{
-	WARN_ON(!lockdep_rtnl_is_held() &&
-		!lockdep_is_held(&nsim_dev->vfs_lock));
-
-	return nsim_dev->nsim_bus_dev->num_vfs;
-}
-
-static void
-nsim_bus_dev_set_vfs(struct nsim_bus_dev *nsim_bus_dev, unsigned int num_vfs)
-{
-	rtnl_lock();
-	nsim_bus_dev->num_vfs = num_vfs;
-	rtnl_unlock();
-}
-
 #define NSIM_DEV_DUMMY_REGION_SIZE (1024 * 32)
 
 static int
@@ -227,70 +211,6 @@ static const struct file_operations nsim_dev_trap_fa_cookie_fops = {
 	.owner = THIS_MODULE,
 };
 
-static ssize_t nsim_bus_dev_max_vfs_read(struct file *file, char __user *data,
-					 size_t count, loff_t *ppos)
-{
-	struct nsim_dev *nsim_dev = file->private_data;
-	char buf[11];
-	ssize_t len;
-
-	len = scnprintf(buf, sizeof(buf), "%u\n",
-			READ_ONCE(nsim_dev->nsim_bus_dev->max_vfs));
-
-	return simple_read_from_buffer(data, count, ppos, buf, len);
-}
-
-static ssize_t nsim_bus_dev_max_vfs_write(struct file *file,
-					  const char __user *data,
-					  size_t count, loff_t *ppos)
-{
-	struct nsim_vf_config *vfconfigs;
-	struct nsim_dev *nsim_dev;
-	char buf[10];
-	ssize_t ret;
-	u32 val;
-
-	if (*ppos != 0)
-		return 0;
-
-	if (count >= sizeof(buf))
-		return -ENOSPC;
-
-	ret = copy_from_user(buf, data, count);
-	if (ret)
-		return -EFAULT;
-	buf[count] = '\0';
-
-	ret = kstrtouint(buf, 10, &val);
-	if (ret)
-		return -EINVAL;
-
-	/* max_vfs limited by the maximum number of provided port indexes */
-	if (val > NSIM_DEV_VF_PORT_INDEX_MAX - NSIM_DEV_VF_PORT_INDEX_BASE)
-		return -ERANGE;
-
-	vfconfigs = kcalloc(val, sizeof(struct nsim_vf_config),
-			    GFP_KERNEL | __GFP_NOWARN);
-	if (!vfconfigs)
-		return -ENOMEM;
-
-	nsim_dev = file->private_data;
-	mutex_lock(&nsim_dev->vfs_lock);
-	/* Reject if VFs are configured */
-	if (nsim_dev_get_vfs(nsim_dev)) {
-		ret = -EBUSY;
-	} else {
-		swap(nsim_dev->vfconfigs, vfconfigs);
-		WRITE_ONCE(nsim_dev->nsim_bus_dev->max_vfs, val);
-		*ppos += count;
-		ret = count;
-	}
-	mutex_unlock(&nsim_dev->vfs_lock);
-
-	kfree(vfconfigs);
-	return ret;
-}
-
 static const struct file_operations nsim_dev_max_vfs_fops = {
 	.open = simple_open,
 	.read = nsim_bus_dev_max_vfs_read,
@@ -340,7 +260,7 @@ static int nsim_dev_debugfs_init(struct nsim_dev *nsim_dev)
 			    nsim_dev->ddir,
 			    &nsim_dev->fail_trap_policer_counter_get);
 	debugfs_create_file("max_vfs", 0600, nsim_dev->ddir,
-			    nsim_dev, &nsim_dev_max_vfs_fops);
+			    nsim_dev->nsim_bus_dev, &nsim_dev_max_vfs_fops);
 
 	nsim_dev->nodes_ddir = debugfs_create_dir("rate_nodes", nsim_dev->ddir);
 	if (IS_ERR(nsim_dev->nodes_ddir)) {
@@ -406,9 +326,9 @@ static int nsim_dev_port_debugfs_init(struct nsim_dev *nsim_dev,
 		unsigned int vf_id = nsim_dev_port_index_to_vf_index(port_index);
 
 		debugfs_create_u16("tx_share", 0400, nsim_dev_port->ddir,
-				   &nsim_dev->vfconfigs[vf_id].min_tx_rate);
+				   &nsim_bus_dev->vfconfigs[vf_id].min_tx_rate);
 		debugfs_create_u16("tx_max", 0400, nsim_dev_port->ddir,
-				   &nsim_dev->vfconfigs[vf_id].max_tx_rate);
+				   &nsim_bus_dev->vfconfigs[vf_id].max_tx_rate);
 		nsim_dev_port->rate_parent = debugfs_create_file("rate_parent",
 								 0400,
 								 nsim_dev_port->ddir,
@@ -562,9 +482,7 @@ static void nsim_dev_dummy_region_exit(struct nsim_dev *nsim_dev)
 }
 
 static void __nsim_dev_port_del(struct nsim_dev_port *nsim_dev_port);
-
-static int nsim_esw_legacy_enable(struct nsim_dev *nsim_dev,
-				  struct netlink_ext_ack *extack)
+int nsim_esw_legacy_enable(struct nsim_dev *nsim_dev, struct netlink_ext_ack *extack)
 {
 	struct devlink *devlink = priv_to_devlink(nsim_dev);
 	struct nsim_dev_port *nsim_dev_port, *tmp;
@@ -579,14 +497,13 @@ static int nsim_esw_legacy_enable(struct nsim_dev *nsim_dev,
 	return 0;
 }
 
-static int nsim_esw_switchdev_enable(struct nsim_dev *nsim_dev,
-				     struct netlink_ext_ack *extack)
+int nsim_esw_switchdev_enable(struct nsim_dev *nsim_dev, struct netlink_ext_ack *extack)
 {
 	struct nsim_bus_dev *nsim_bus_dev = nsim_dev->nsim_bus_dev;
 	int i, err;
 
-	for (i = 0; i < nsim_dev_get_vfs(nsim_dev); i++) {
-		err = nsim_drv_port_add(nsim_bus_dev, NSIM_DEV_PORT_TYPE_VF, i);
+	for (i = 0; i < nsim_bus_dev->num_vfs; i++) {
+		err = nsim_dev_port_add(nsim_bus_dev, NSIM_DEV_PORT_TYPE_VF, i);
 		if (err) {
 			NL_SET_ERR_MSG_MOD(extack, "Failed to initialize VFs' netdevsim ports");
 			pr_err("Failed to initialize VF id=%d. %d.\n", i, err);
@@ -598,7 +515,7 @@ static int nsim_esw_switchdev_enable(struct nsim_dev *nsim_dev,
 
 err_port_add_vfs:
 	for (i--; i >= 0; i--)
-		nsim_drv_port_del(nsim_bus_dev, NSIM_DEV_PORT_TYPE_VF, i);
+		nsim_dev_port_del(nsim_bus_dev, NSIM_DEV_PORT_TYPE_VF, i);
 	return err;
 }
 
@@ -608,7 +525,7 @@ static int nsim_devlink_eswitch_mode_set(struct devlink *devlink, u16 mode,
 	struct nsim_dev *nsim_dev = devlink_priv(devlink);
 	int err = 0;
 
-	mutex_lock(&nsim_dev->vfs_lock);
+	mutex_lock(&nsim_dev->nsim_bus_dev->vfs_lock);
 	if (mode == nsim_dev->esw_mode)
 		goto unlock;
 
@@ -620,7 +537,7 @@ static int nsim_devlink_eswitch_mode_set(struct devlink *devlink, u16 mode,
 		err = -EINVAL;
 
 unlock:
-	mutex_unlock(&nsim_dev->vfs_lock);
+	mutex_unlock(&nsim_dev->nsim_bus_dev->vfs_lock);
 	return err;
 }
 
@@ -953,7 +870,6 @@ static int nsim_dev_reload_down(struct devlink *devlink, bool netns_change,
 		mutex_unlock(&nsim_bus_dev->nsim_bus_reload_lock);
 		return -EOPNOTSUPP;
 	}
-	nsim_bus_dev->in_reload = true;
 
 	nsim_dev_reload_destroy(nsim_dev);
 	mutex_unlock(&nsim_bus_dev->nsim_bus_reload_lock);
@@ -965,26 +881,17 @@ static int nsim_dev_reload_up(struct devlink *devlink, enum devlink_reload_actio
 			      struct netlink_ext_ack *extack)
 {
 	struct nsim_dev *nsim_dev = devlink_priv(devlink);
-	struct nsim_bus_dev *nsim_bus_dev;
-	int ret;
-
-	nsim_bus_dev = nsim_dev->nsim_bus_dev;
-	mutex_lock(&nsim_bus_dev->nsim_bus_reload_lock);
-	nsim_bus_dev->in_reload = false;
 
 	if (nsim_dev->fail_reload) {
 		/* For testing purposes, user set debugfs fail_reload
 		 * value to true. Fail right away.
 		 */
 		NL_SET_ERR_MSG_MOD(extack, "User setup the reload to fail for testing purposes");
-		mutex_unlock(&nsim_bus_dev->nsim_bus_reload_lock);
 		return -EINVAL;
 	}
 
 	*actions_performed = BIT(DEVLINK_RELOAD_ACTION_DRIVER_REINIT);
-	ret = nsim_dev_reload_create(nsim_dev, extack);
-	mutex_unlock(&nsim_bus_dev->nsim_bus_reload_lock);
-	return ret;
+	return nsim_dev_reload_create(nsim_dev, extack);
 }
 
 static int nsim_dev_info_get(struct devlink *devlink,
@@ -1168,7 +1075,7 @@ static int nsim_leaf_tx_share_set(struct devlink_rate *devlink_rate, void *priv,
 				  u64 tx_share, struct netlink_ext_ack *extack)
 {
 	struct nsim_dev_port *nsim_dev_port = priv;
-	struct nsim_dev *nsim_dev = nsim_dev_port->ns->nsim_dev;
+	struct nsim_bus_dev *nsim_bus_dev = nsim_dev_port->ns->nsim_bus_dev;
 	int vf_id = nsim_dev_port_index_to_vf_index(nsim_dev_port->port_index);
 	int err;
 
@@ -1176,7 +1083,7 @@ static int nsim_leaf_tx_share_set(struct devlink_rate *devlink_rate, void *priv,
 	if (err)
 		return err;
 
-	nsim_dev->vfconfigs[vf_id].min_tx_rate = tx_share;
+	nsim_bus_dev->vfconfigs[vf_id].min_tx_rate = tx_share;
 	return 0;
 }
 
@@ -1184,7 +1091,7 @@ static int nsim_leaf_tx_max_set(struct devlink_rate *devlink_rate, void *priv,
 				u64 tx_max, struct netlink_ext_ack *extack)
 {
 	struct nsim_dev_port *nsim_dev_port = priv;
-	struct nsim_dev *nsim_dev = nsim_dev_port->ns->nsim_dev;
+	struct nsim_bus_dev *nsim_bus_dev = nsim_dev_port->ns->nsim_bus_dev;
 	int vf_id = nsim_dev_port_index_to_vf_index(nsim_dev_port->port_index);
 	int err;
 
@@ -1192,7 +1099,7 @@ static int nsim_leaf_tx_max_set(struct devlink_rate *devlink_rate, void *priv,
 	if (err)
 		return err;
 
-	nsim_dev->vfconfigs[vf_id].max_tx_rate = tx_max;
+	nsim_bus_dev->vfconfigs[vf_id].max_tx_rate = tx_max;
 	return 0;
 }
 
@@ -1237,6 +1144,7 @@ static int nsim_rate_node_new(struct devlink_rate *node, void **priv,
 {
 	struct nsim_dev *nsim_dev = devlink_priv(node->devlink);
 	struct nsim_rate_node *nsim_node;
+	int err;
 
 	if (!nsim_esw_mode_is_switchdev(nsim_dev)) {
 		NL_SET_ERR_MSG_MOD(extack, "Node creation allowed only in switchdev mode.");
@@ -1248,16 +1156,29 @@ static int nsim_rate_node_new(struct devlink_rate *node, void **priv,
 		return -ENOMEM;
 
 	nsim_node->ddir = debugfs_create_dir(node->name, nsim_dev->nodes_ddir);
-
+	if (!nsim_node->ddir) {
+		err = -ENOMEM;
+		goto err_node;
+	}
 	debugfs_create_u16("tx_share", 0400, nsim_node->ddir, &nsim_node->tx_share);
 	debugfs_create_u16("tx_max", 0400, nsim_node->ddir, &nsim_node->tx_max);
 	nsim_node->rate_parent = debugfs_create_file("rate_parent", 0400,
 						     nsim_node->ddir,
 						     &nsim_node->parent_name,
 						     &nsim_dev_rate_parent_fops);
+	if (IS_ERR(nsim_node->rate_parent)) {
+		err = PTR_ERR(nsim_node->rate_parent);
+		goto err_ddir;
+	}
 
 	*priv = nsim_node;
 	return 0;
+
+err_ddir:
+	debugfs_remove_recursive(nsim_node->ddir);
+err_node:
+	kfree(nsim_node);
+	return err;
 }
 
 static int nsim_rate_node_del(struct devlink_rate *node, void *priv,
@@ -1348,12 +1269,13 @@ static const struct devlink_ops nsim_dev_devlink_ops = {
 static int __nsim_dev_port_add(struct nsim_dev *nsim_dev, enum nsim_dev_port_type type,
 			       unsigned int port_index)
 {
+	struct nsim_bus_dev *nsim_bus_dev = nsim_dev->nsim_bus_dev;
 	struct devlink_port_attrs attrs = {};
 	struct nsim_dev_port *nsim_dev_port;
 	struct devlink_port *devlink_port;
 	int err;
 
-	if (type == NSIM_DEV_PORT_TYPE_VF && !nsim_dev_get_vfs(nsim_dev))
+	if (type == NSIM_DEV_PORT_TYPE_VF && !nsim_bus_dev->num_vfs)
 		return -EINVAL;
 
 	nsim_dev_port = kzalloc(sizeof(*nsim_dev_port), GFP_KERNEL);
@@ -1516,7 +1438,7 @@ err_dummy_region_exit:
 	return err;
 }
 
-int nsim_drv_probe(struct nsim_bus_dev *nsim_bus_dev)
+int nsim_dev_probe(struct nsim_bus_dev *nsim_bus_dev)
 {
 	struct nsim_dev *nsim_dev;
 	struct devlink *devlink;
@@ -1531,7 +1453,6 @@ int nsim_drv_probe(struct nsim_bus_dev *nsim_bus_dev)
 	nsim_dev->switch_id.id_len = sizeof(nsim_dev->switch_id.id);
 	get_random_bytes(nsim_dev->switch_id.id, nsim_dev->switch_id.id_len);
 	INIT_LIST_HEAD(&nsim_dev->port_list);
-	mutex_init(&nsim_dev->vfs_lock);
 	mutex_init(&nsim_dev->port_list_lock);
 	nsim_dev->fw_update_status = true;
 	nsim_dev->fw_update_overwrite_mask = 0;
@@ -1541,17 +1462,9 @@ int nsim_drv_probe(struct nsim_bus_dev *nsim_bus_dev)
 
 	dev_set_drvdata(&nsim_bus_dev->dev, nsim_dev);
 
-	nsim_dev->vfconfigs = kcalloc(nsim_bus_dev->max_vfs,
-				      sizeof(struct nsim_vf_config),
-				      GFP_KERNEL | __GFP_NOWARN);
-	if (!nsim_dev->vfconfigs) {
-		err = -ENOMEM;
-		goto err_devlink_free;
-	}
-
 	err = nsim_dev_resources_register(devlink);
 	if (err)
-		goto err_vfc_free;
+		goto err_devlink_free;
 
 	err = devlink_params_register(devlink, nsim_devlink_params,
 				      ARRAY_SIZE(nsim_devlink_params));
@@ -1617,11 +1530,8 @@ err_params_unregister:
 				  ARRAY_SIZE(nsim_devlink_params));
 err_dl_unregister:
 	devlink_resources_unregister(devlink);
-err_vfc_free:
-	kfree(nsim_dev->vfconfigs);
 err_devlink_free:
 	devlink_free(devlink);
-	dev_set_drvdata(&nsim_bus_dev->dev, NULL);
 	return err;
 }
 
@@ -1633,13 +1543,10 @@ static void nsim_dev_reload_destroy(struct nsim_dev *nsim_dev)
 		return;
 	debugfs_remove(nsim_dev->take_snapshot);
 
-	mutex_lock(&nsim_dev->vfs_lock);
-	if (nsim_dev_get_vfs(nsim_dev)) {
-		nsim_bus_dev_set_vfs(nsim_dev->nsim_bus_dev, 0);
-		if (nsim_esw_mode_is_switchdev(nsim_dev))
-			nsim_esw_legacy_enable(nsim_dev, NULL);
-	}
-	mutex_unlock(&nsim_dev->vfs_lock);
+	mutex_lock(&nsim_dev->nsim_bus_dev->vfs_lock);
+	if (nsim_dev->nsim_bus_dev->num_vfs)
+		nsim_bus_dev_vfs_disable(nsim_dev->nsim_bus_dev);
+	mutex_unlock(&nsim_dev->nsim_bus_dev->vfs_lock);
 
 	nsim_dev_port_del_all(nsim_dev);
 	nsim_dev_psample_exit(nsim_dev);
@@ -1650,7 +1557,7 @@ static void nsim_dev_reload_destroy(struct nsim_dev *nsim_dev)
 	mutex_destroy(&nsim_dev->port_list_lock);
 }
 
-void nsim_drv_remove(struct nsim_bus_dev *nsim_bus_dev)
+void nsim_dev_remove(struct nsim_bus_dev *nsim_bus_dev)
 {
 	struct nsim_dev *nsim_dev = dev_get_drvdata(&nsim_bus_dev->dev);
 	struct devlink *devlink = priv_to_devlink(nsim_dev);
@@ -1663,9 +1570,7 @@ void nsim_drv_remove(struct nsim_bus_dev *nsim_bus_dev)
 	devlink_params_unregister(devlink, nsim_devlink_params,
 				  ARRAY_SIZE(nsim_devlink_params));
 	devlink_resources_unregister(devlink);
-	kfree(nsim_dev->vfconfigs);
 	devlink_free(devlink);
-	dev_set_drvdata(&nsim_bus_dev->dev, NULL);
 }
 
 static struct nsim_dev_port *
@@ -1681,7 +1586,7 @@ __nsim_dev_port_lookup(struct nsim_dev *nsim_dev, enum nsim_dev_port_type type,
 	return NULL;
 }
 
-int nsim_drv_port_add(struct nsim_bus_dev *nsim_bus_dev, enum nsim_dev_port_type type,
+int nsim_dev_port_add(struct nsim_bus_dev *nsim_bus_dev, enum nsim_dev_port_type type,
 		      unsigned int port_index)
 {
 	struct nsim_dev *nsim_dev = dev_get_drvdata(&nsim_bus_dev->dev);
@@ -1696,7 +1601,7 @@ int nsim_drv_port_add(struct nsim_bus_dev *nsim_bus_dev, enum nsim_dev_port_type
 	return err;
 }
 
-int nsim_drv_port_del(struct nsim_bus_dev *nsim_bus_dev, enum nsim_dev_port_type type,
+int nsim_dev_port_del(struct nsim_bus_dev *nsim_bus_dev, enum nsim_dev_port_type type,
 		      unsigned int port_index)
 {
 	struct nsim_dev *nsim_dev = dev_get_drvdata(&nsim_bus_dev->dev);
@@ -1711,43 +1616,6 @@ int nsim_drv_port_del(struct nsim_bus_dev *nsim_bus_dev, enum nsim_dev_port_type
 		__nsim_dev_port_del(nsim_dev_port);
 	mutex_unlock(&nsim_dev->port_list_lock);
 	return err;
-}
-
-int nsim_drv_configure_vfs(struct nsim_bus_dev *nsim_bus_dev,
-			   unsigned int num_vfs)
-{
-	struct nsim_dev *nsim_dev = dev_get_drvdata(&nsim_bus_dev->dev);
-	int ret = 0;
-
-	mutex_lock(&nsim_dev->vfs_lock);
-	if (nsim_bus_dev->num_vfs == num_vfs)
-		goto exit_unlock;
-	if (nsim_bus_dev->num_vfs && num_vfs) {
-		ret = -EBUSY;
-		goto exit_unlock;
-	}
-	if (nsim_bus_dev->max_vfs < num_vfs) {
-		ret = -ENOMEM;
-		goto exit_unlock;
-	}
-
-	nsim_bus_dev_set_vfs(nsim_bus_dev, num_vfs);
-	if (nsim_esw_mode_is_switchdev(nsim_dev)) {
-		if (num_vfs) {
-			ret = nsim_esw_switchdev_enable(nsim_dev, NULL);
-			if (ret) {
-				nsim_bus_dev_set_vfs(nsim_bus_dev, 0);
-				goto exit_unlock;
-			}
-		} else {
-			nsim_esw_legacy_enable(nsim_dev, NULL);
-		}
-	}
-
-exit_unlock:
-	mutex_unlock(&nsim_dev->vfs_lock);
-
-	return ret;
 }
 
 int nsim_dev_init(void)

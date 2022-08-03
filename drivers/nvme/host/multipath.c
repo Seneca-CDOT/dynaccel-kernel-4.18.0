@@ -148,27 +148,13 @@ void nvme_mpath_clear_ctrl_paths(struct nvme_ctrl *ctrl)
 {
 	struct nvme_ns *ns;
 
+	mutex_lock(&ctrl->scan_lock);
 	down_read(&ctrl->namespaces_rwsem);
-	list_for_each_entry(ns, &ctrl->namespaces, list) {
-		nvme_mpath_clear_current_path(ns);
-		kblockd_schedule_work(&ns->head->requeue_work);
-	}
+	list_for_each_entry(ns, &ctrl->namespaces, list)
+		if (nvme_mpath_clear_current_path(ns))
+			kblockd_schedule_work(&ns->head->requeue_work);
 	up_read(&ctrl->namespaces_rwsem);
-}
-
-void nvme_mpath_revalidate_paths(struct nvme_ns *ns)
-{
-	struct nvme_ns_head *head = ns->head;
-	sector_t capacity = get_capacity(head->disk);
-	int node;
-
-	list_for_each_entry_rcu(ns, &head->list, siblings) {
-		if (capacity != get_capacity(ns->disk))
-			clear_bit(NVME_NS_READY, &ns->flags);
-	}
-
-	for_each_node(node)
-		rcu_assign_pointer(head->current_path[node], NULL);
+	mutex_unlock(&ctrl->scan_lock);
 }
 
 static bool nvme_path_is_disabled(struct nvme_ns *ns)
@@ -182,7 +168,7 @@ static bool nvme_path_is_disabled(struct nvme_ns *ns)
 	    ns->ctrl->state != NVME_CTRL_DELETING)
 		return true;
 	if (test_bit(NVME_NS_ANA_PENDING, &ns->flags) ||
-	    !test_bit(NVME_NS_READY, &ns->flags))
+	    test_bit(NVME_NS_REMOVING, &ns->flags))
 		return true;
 	return false;
 }
@@ -563,7 +549,7 @@ static int nvme_parse_ana_log(struct nvme_ctrl *ctrl, void *data,
 			return -EINVAL;
 
 		nr_nsids = le32_to_cpu(desc->nnsids);
-		nsid_buf_size = flex_array_size(desc, nsids, nr_nsids);
+		nsid_buf_size = nr_nsids * sizeof(__le32);
 
 		if (WARN_ON_ONCE(desc->grpid == 0))
 			return -EINVAL;
@@ -599,17 +585,8 @@ static void nvme_update_ns_ana_state(struct nvme_ana_group_desc *desc,
 	ns->ana_grpid = le32_to_cpu(desc->grpid);
 	ns->ana_state = desc->state;
 	clear_bit(NVME_NS_ANA_PENDING, &ns->flags);
-	/*
-	 * nvme_mpath_set_live() will trigger I/O to the multipath path device
-	 * and in turn to this path device.  However we cannot accept this I/O
-	 * if the controller is not live.  This may deadlock if called from
-	 * nvme_mpath_init_identify() and the ctrl will never complete
-	 * initialization, preventing I/O from completing.  For this case we
-	 * will reprocess the ANA log page in nvme_mpath_update() once the
-	 * controller is ready.
-	 */
-	if (nvme_state_is_live(ns->ana_state) &&
-	    ns->ctrl->state == NVME_CTRL_LIVE)
+
+	if (nvme_state_is_live(ns->ana_state))
 		nvme_mpath_set_live(ns);
 }
 
@@ -694,18 +671,6 @@ static void nvme_ana_work(struct work_struct *work)
 		return;
 
 	nvme_read_ana_log(ctrl);
-}
-
-void nvme_mpath_update(struct nvme_ctrl *ctrl)
-{
-	u32 nr_change_groups = 0;
-
-	if (!ctrl->ana_log_buf)
-		return;
-
-	mutex_lock(&ctrl->ana_lock);
-	nvme_parse_ana_log(ctrl, &nr_change_groups, nvme_update_ana_state);
-	mutex_unlock(&ctrl->ana_lock);
 }
 
 static void nvme_anatt_timeout(struct timer_list *t)
@@ -897,7 +862,7 @@ int nvme_mpath_init_identify(struct nvme_ctrl *ctrl, struct nvme_id_ctrl *id)
 	}
 	if (ana_log_size > ctrl->ana_log_size) {
 		nvme_mpath_stop(ctrl);
-		nvme_mpath_uninit(ctrl);
+		kfree(ctrl->ana_log_buf);
 		ctrl->ana_log_buf = kmalloc(ana_log_size, GFP_KERNEL);
 		if (!ctrl->ana_log_buf)
 			return -ENOMEM;
@@ -917,5 +882,4 @@ void nvme_mpath_uninit(struct nvme_ctrl *ctrl)
 {
 	kfree(ctrl->ana_log_buf);
 	ctrl->ana_log_buf = NULL;
-	ctrl->ana_log_size = 0;
 }

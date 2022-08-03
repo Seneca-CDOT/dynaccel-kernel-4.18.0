@@ -1509,6 +1509,7 @@ int dm_cache_load_mappings(struct dm_cache_metadata *cmd,
 
 static int __dump_mapping(void *context, uint64_t cblock, void *leaf)
 {
+	int r = 0;
 	__le64 value;
 	dm_oblock_t oblock;
 	unsigned flags;
@@ -1516,7 +1517,7 @@ static int __dump_mapping(void *context, uint64_t cblock, void *leaf)
 	memcpy(&value, leaf, sizeof(value));
 	unpack_value(value, &oblock, &flags);
 
-	return 0;
+	return r;
 }
 
 static int __dump_mappings(struct dm_cache_metadata *cmd)

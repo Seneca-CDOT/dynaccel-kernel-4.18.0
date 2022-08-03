@@ -32,12 +32,10 @@
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/mem_encrypt.h>
-#include <linux/cc_platform.h>
 
 #include <asm/setup.h>
 #include <asm/sections.h>
 #include <asm/cmdline.h>
-#include <asm/coco.h>
 
 #include "mm_internal.h"
 
@@ -291,13 +289,7 @@ void __init sme_encrypt_kernel(struct boot_params *bp)
 	unsigned long pgtable_area_len;
 	unsigned long decrypted_base;
 
-	/*
-	 * This is early code, use an open coded check for SME instead of
-	 * using cc_platform_has(). This eliminates worries about removing
-	 * instrumentation or checking boot_cpu_data in the cc_platform_has()
-	 * function.
-	 */
-	if (!sme_get_me_mask() || sev_status & MSR_AMD64_SEV_ENABLED)
+	if (!sme_active())
 		return;
 
 	/*
@@ -555,7 +547,8 @@ void __init sme_enable(struct boot_params *bp)
 
 		/* SEV state cannot be controlled by a command line option */
 		sme_me_mask = me_mask;
-		goto out;
+		physical_mask &= ~sme_me_mask;
+		return;
 	}
 
 	/*
@@ -589,9 +582,6 @@ void __init sme_enable(struct boot_params *bp)
 		sme_me_mask = 0;
 	else
 		sme_me_mask = active_by_default ? me_mask : 0;
-out:
-	if (sme_me_mask) {
-		physical_mask &= ~sme_me_mask;
-		cc_set_vendor(CC_VENDOR_AMD);
-	}
+
+	physical_mask &= ~sme_me_mask;
 }

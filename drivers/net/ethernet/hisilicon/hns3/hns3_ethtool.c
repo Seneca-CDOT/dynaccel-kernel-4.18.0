@@ -524,9 +524,7 @@ static u32 hns3_get_link(struct net_device *netdev)
 }
 
 static void hns3_get_ringparam(struct net_device *netdev,
-			       struct ethtool_ringparam *param,
-			       struct kernel_ethtool_ringparam *kernel_param,
-			       struct netlink_ext_ack *extack)
+			       struct ethtool_ringparam *param)
 {
 	struct hns3_nic_priv *priv = netdev_priv(netdev);
 	struct hnae3_handle *h = priv->ae_handle;
@@ -740,9 +738,7 @@ static int hns3_change_all_ring_bd_num(struct hns3_nic_priv *priv,
 }
 
 static int hns3_set_ringparam(struct net_device *ndev,
-			      struct ethtool_ringparam *param,
-			      struct kernel_ethtool_ringparam *kernel_param,
-			      struct netlink_ext_ack *extack)
+			      struct ethtool_ringparam *param)
 {
 	struct hns3_nic_priv *priv = netdev_priv(ndev);
 	struct hnae3_handle *h = priv->ae_handle;

@@ -412,15 +412,12 @@ static int atl_resume_common(struct device *dev, bool deep)
 	pci_restore_state(pdev);
 
 	if (deep) {
-		/* Reinitialize Nic/Vecs objects */
-		aq_nic_deinit(nic, !nic->aq_hw->aq_nic_cfg->wol);
-	}
-
-	if (netif_running(nic->ndev)) {
 		ret = aq_nic_init(nic);
 		if (ret)
 			goto err_exit;
+	}
 
+	if (netif_running(nic->ndev)) {
 		ret = aq_nic_start(nic);
 		if (ret)
 			goto err_exit;

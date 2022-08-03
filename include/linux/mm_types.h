@@ -31,7 +31,6 @@
 /* RH KABI check requires this to be this "string" rather than just "46". */
 #define ORIG_AT_VECTOR_SIZE (2*(ORIG_AT_VECTOR_SIZE_ARCH + AT_VECTOR_SIZE_BASE + 1))
 
-#define INIT_PASID	0
 
 struct address_space;
 struct mem_cgroup;
@@ -572,7 +571,7 @@ struct mm_struct {
 #endif
 	} __randomize_layout;
 
-#if defined(CONFIG_IOMMU_SVA)
+#if defined(CONFIG_IOMMU_SUPPORT)
 	RH_KABI_USE(1, u32 pasid)
 #else
 	RH_KABI_RESERVE(1)

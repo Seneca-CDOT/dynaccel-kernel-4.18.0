@@ -45,6 +45,9 @@ static int numa_enabled = 1;
 
 static char *cmdline __initdata;
 
+static int numa_debug;
+#define dbg(args...) if (numa_debug) { printk(KERN_INFO args); }
+
 int numa_cpu_lookup_table[NR_CPUS];
 cpumask_var_t node_to_cpumask_map[MAX_NUMNODES];
 struct pglist_data *node_data[MAX_NUMNODES];
@@ -89,7 +92,7 @@ static void __init setup_node_to_cpumask_map(void)
 		alloc_bootmem_cpumask_var(&node_to_cpumask_map[node]);
 
 	/* cpumask_of_node() will now work */
-	pr_debug("Node to cpumask map for %u nodes\n", nr_node_ids);
+	dbg("Node to cpumask map for %u nodes\n", nr_node_ids);
 }
 
 static int __init fake_numa_create_new_node(unsigned long end_pfn,
@@ -133,7 +136,7 @@ static int __init fake_numa_create_new_node(unsigned long end_pfn,
 		cmdline = p;
 		fake_nid++;
 		*nid = fake_nid;
-		pr_debug("created new fake_node with id %d\n", fake_nid);
+		dbg("created new fake_node with id %d\n", fake_nid);
 		return 1;
 	}
 	return 0;
@@ -147,26 +150,28 @@ static void reset_numa_cpu_lookup_table(void)
 		numa_cpu_lookup_table[cpu] = -1;
 }
 
-void map_cpu_to_node(int cpu, int node)
+static void map_cpu_to_node(int cpu, int node)
 {
 	update_numa_cpu_lookup_table(cpu, node);
 
-	if (!(cpumask_test_cpu(cpu, node_to_cpumask_map[node]))) {
-		pr_debug("adding cpu %d to node %d\n", cpu, node);
+	dbg("adding cpu %d to node %d\n", cpu, node);
+
+	if (!(cpumask_test_cpu(cpu, node_to_cpumask_map[node])))
 		cpumask_set_cpu(cpu, node_to_cpumask_map[node]);
-	}
 }
 
 #if defined(CONFIG_HOTPLUG_CPU) || defined(CONFIG_PPC_SPLPAR)
-void unmap_cpu_from_node(unsigned long cpu)
+static void unmap_cpu_from_node(unsigned long cpu)
 {
 	int node = numa_cpu_lookup_table[cpu];
 
+	dbg("removing cpu %lu from node %d\n", cpu, node);
+
 	if (cpumask_test_cpu(cpu, node_to_cpumask_map[node])) {
 		cpumask_clear_cpu(cpu, node_to_cpumask_map[node]);
-		pr_debug("removing cpu %lu from node %d\n", cpu, node);
 	} else {
-		pr_warn("Warning: cpu %lu not found in node %d\n", cpu, node);
+		printk(KERN_ERR "WARNING: cpu %lu not found in node %d\n",
+		       cpu, node);
 	}
 }
 #endif /* CONFIG_HOTPLUG_CPU || CONFIG_PPC_SPLPAR */
@@ -450,10 +455,10 @@ static int __init find_primary_domain_index(void)
 	if (firmware_has_feature(FW_FEATURE_OPAL)) {
 		affinity_form = FORM1_AFFINITY;
 	} else if (firmware_has_feature(FW_FEATURE_FORM2_AFFINITY)) {
-		pr_debug("Using form 2 affinity\n");
+		dbg("Using form 2 affinity\n");
 		affinity_form = FORM2_AFFINITY;
 	} else if (firmware_has_feature(FW_FEATURE_FORM1_AFFINITY)) {
-		pr_debug("Using form 1 affinity\n");
+		dbg("Using form 1 affinity\n");
 		affinity_form = FORM1_AFFINITY;
 	} else
 		affinity_form = FORM0_AFFINITY;
@@ -482,14 +487,15 @@ static int __init find_primary_domain_index(void)
 					&distance_ref_points_depth);
 
 	if (!distance_ref_points) {
-		pr_debug("ibm,associativity-reference-points not found.\n");
+		dbg("NUMA: ibm,associativity-reference-points not found.\n");
 		goto err;
 	}
 
 	distance_ref_points_depth /= sizeof(int);
 	if (affinity_form == FORM0_AFFINITY) {
 		if (distance_ref_points_depth < 2) {
-			pr_warn("short ibm,associativity-reference-points\n");
+			printk(KERN_WARNING "NUMA: "
+			       "short ibm,associativity-reference-points\n");
 			goto err;
 		}
 
@@ -506,8 +512,8 @@ static int __init find_primary_domain_index(void)
 	 * MAX_DISTANCE_REF_POINTS domains.
 	 */
 	if (distance_ref_points_depth > MAX_DISTANCE_REF_POINTS) {
-		pr_warn("distance array capped at %d entries\n",
-			MAX_DISTANCE_REF_POINTS);
+		printk(KERN_WARNING "NUMA: distance array capped at "
+			"%d entries\n", MAX_DISTANCE_REF_POINTS);
 		distance_ref_points_depth = MAX_DISTANCE_REF_POINTS;
 	}
 
@@ -805,6 +811,9 @@ static int ppc_numa_cpu_prepare(unsigned int cpu)
 
 static int ppc_numa_cpu_dead(unsigned int cpu)
 {
+#ifdef CONFIG_HOTPLUG_CPU
+	unmap_cpu_from_node(cpu);
+#endif
 	return 0;
 }
 
@@ -909,7 +918,7 @@ static int __init parse_numa_properties(void)
 	const __be32 *associativity;
 
 	if (numa_enabled == 0) {
-		pr_warn("disabled by user\n");
+		printk(KERN_WARNING "NUMA disabled by user\n");
 		return -1;
 	}
 
@@ -924,7 +933,7 @@ static int __init parse_numa_properties(void)
 		return primary_domain_index;
 	}
 
-	pr_debug("associativity depth for CPU/Memory: %d\n", primary_domain_index);
+	dbg("NUMA associativity depth for CPU/Memory: %d\n", primary_domain_index);
 
 	/*
 	 * If it is FORM2 initialize the distance table here.
@@ -1039,8 +1048,10 @@ static void __init setup_nonnuma(void)
 	unsigned int nid = 0;
 	struct memblock_region *reg;
 
-	pr_debug("Top of RAM: 0x%lx, Total RAM: 0x%lx\n", top_of_ram, total_ram);
-	pr_debug("Memory hole size: %ldMB\n", (top_of_ram - total_ram) >> 20);
+	printk(KERN_DEBUG "Top of RAM: 0x%lx, Total RAM: 0x%lx\n",
+	       top_of_ram, total_ram);
+	printk(KERN_DEBUG "Memory hole size: %ldMB\n",
+	       (top_of_ram - total_ram) >> 20);
 
 	for_each_memblock(memory, reg) {
 		start_pfn = memblock_region_memory_base_pfn(reg);
@@ -1247,6 +1258,9 @@ static int __init early_numa(char *p)
 	if (strstr(p, "off"))
 		numa_enabled = 0;
 
+	if (strstr(p, "debug"))
+		numa_debug = 1;
+
 	p = strstr(p, "fake=");
 	if (p)
 		cmdline = p + strlen("fake=");
@@ -1409,7 +1423,7 @@ static long vphn_get_associativity(unsigned long cpu,
 
 	switch (rc) {
 	case H_SUCCESS:
-		pr_debug("VPHN hcall succeeded. Reset polling...\n");
+		dbg("VPHN hcall succeeded. Reset polling...\n");
 		goto out;
 
 	case H_FUNCTION:
@@ -1445,7 +1459,7 @@ int find_and_online_cpu_nid(int cpu)
 	if (new_nid < 0 || !node_possible(new_nid))
 		new_nid = first_online_node;
 
-	if (!node_online(new_nid)) {
+	if (NODE_DATA(new_nid) == NULL) {
 #ifdef CONFIG_MEMORY_HOTPLUG
 		/*
 		 * Need to ensure that NODE_DATA is initialized for a node from

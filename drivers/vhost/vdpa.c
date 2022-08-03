@@ -195,7 +195,7 @@ static int vhost_vdpa_config_validate(struct vhost_vdpa *v,
 				      struct vhost_vdpa_config *c)
 {
 	struct vdpa_device *vdpa = v->vdpa;
-	size_t size = vdpa->config->get_config_size(vdpa);
+	long size = vdpa->config->get_config_size(vdpa);
 
 	if (c->len == 0)
 		return -EINVAL;
@@ -518,7 +518,7 @@ static void vhost_vdpa_pa_unmap(struct vhost_vdpa *v, u64 start, u64 last)
 			page = pfn_to_page(pfn);
 			if (map->perm & VHOST_ACCESS_WO)
 				set_page_dirty_lock(page);
-			unpin_user_page(page);
+			put_page(page);
 		}
 		atomic64_sub(PFN_DOWN(map->size), &dev->mm->pinned_vm);
 		vhost_iotlb_map_free(iotlb, map);
@@ -723,13 +723,14 @@ static int vhost_vdpa_pa_map(struct vhost_vdpa *v,
 
 	while (npages) {
 		sz2pin = min_t(unsigned long, npages, list_size);
-		pinned = pin_user_pages(cur_base, sz2pin,
+		pinned = get_user_pages(cur_base, sz2pin,
 					gup_flags, page_list, NULL);
 		if (sz2pin != pinned) {
 			if (pinned < 0) {
 				ret = pinned;
 			} else {
-				unpin_user_pages(page_list, pinned);
+				for (i = 0; i < pinned; i ++)
+					put_page(page_list[i]);
 				ret = -ENOMEM;
 			}
 			goto out;
@@ -758,8 +759,10 @@ static int vhost_vdpa_pa_map(struct vhost_vdpa *v,
 					 * chunks will be covered in the common
 					 * error path subsequently.
 					 */
-					unpin_user_pages(&page_list[i],
-							 pinned - i);
+					int j;
+
+					for (j = i; j < pinned; j++)
+						put_page(page_list[j]);
 					goto out;
 				}
 
@@ -794,7 +797,7 @@ out:
 			 */
 			WARN_ON(!last_pfn);
 			for (pfn = map_pfn; pfn <= last_pfn; pfn++)
-				unpin_user_page(pfn_to_page(pfn));
+				put_page(pfn_to_page(pfn));
 		}
 		vhost_vdpa_unmap(v, start, size);
 	}

@@ -41,11 +41,11 @@ struct idxd_user_context {
 
 static void idxd_cdev_dev_release(struct device *dev)
 {
-	struct idxd_cdev *idxd_cdev = dev_to_cdev(dev);
+	struct idxd_cdev *idxd_cdev = container_of(dev, struct idxd_cdev, dev);
 	struct idxd_cdev_context *cdev_ctx;
 	struct idxd_wq *wq = idxd_cdev->wq;
 
-	cdev_ctx = &ictx[wq->idxd->data->type];
+	cdev_ctx = &ictx[wq->idxd->type];
 	ida_simple_remove(&cdev_ctx->minor_ida, idxd_cdev->minor);
 	kfree(idxd_cdev);
 }
@@ -99,7 +99,7 @@ static int idxd_cdev_open(struct inode *inode, struct file *filp)
 	ctx->wq = wq;
 	filp->private_data = ctx;
 
-	if (device_user_pasid_enabled(idxd)) {
+	if (device_pasid_enabled(idxd)) {
 		sva = iommu_sva_bind_device(dev, current->mm, NULL);
 		if (IS_ERR(sva)) {
 			rc = PTR_ERR(sva);
@@ -152,7 +152,7 @@ static int idxd_cdev_release(struct inode *node, struct file *filep)
 	if (wq_shared(wq)) {
 		idxd_device_drain_pasid(idxd, ctx->pasid);
 	} else {
-		if (device_user_pasid_enabled(idxd)) {
+		if (device_pasid_enabled(idxd)) {
 			/* The wq disable in the disable pasid function will drain the wq */
 			rc = idxd_wq_disable_pasid(wq);
 			if (rc < 0)
@@ -218,13 +218,14 @@ static __poll_t idxd_cdev_poll(struct file *filp,
 	struct idxd_user_context *ctx = filp->private_data;
 	struct idxd_wq *wq = ctx->wq;
 	struct idxd_device *idxd = wq->idxd;
+	unsigned long flags;
 	__poll_t out = 0;
 
 	poll_wait(filp, &wq->err_queue, wait);
-	spin_lock(&idxd->dev_lock);
+	spin_lock_irqsave(&idxd->dev_lock, flags);
 	if (idxd->sw_err.valid)
 		out = EPOLLIN | EPOLLRDNORM;
-	spin_unlock(&idxd->dev_lock);
+	spin_unlock_irqrestore(&idxd->dev_lock, flags);
 
 	return out;
 }
@@ -239,7 +240,7 @@ static const struct file_operations idxd_cdev_fops = {
 
 int idxd_cdev_get_major(struct idxd_device *idxd)
 {
-	return MAJOR(ictx[idxd->data->type].devt);
+	return MAJOR(ictx[idxd->type].devt);
 }
 
 int idxd_wq_add_cdev(struct idxd_wq *wq)
@@ -255,11 +256,10 @@ int idxd_wq_add_cdev(struct idxd_wq *wq)
 	if (!idxd_cdev)
 		return -ENOMEM;
 
-	idxd_cdev->idxd_dev.type = IDXD_DEV_CDEV;
 	idxd_cdev->wq = wq;
 	cdev = &idxd_cdev->cdev;
-	dev = cdev_dev(idxd_cdev);
-	cdev_ctx = &ictx[wq->idxd->data->type];
+	dev = &idxd_cdev->dev;
+	cdev_ctx = &ictx[wq->idxd->type];
 	minor = ida_simple_get(&cdev_ctx->minor_ida, 0, MINORMASK, GFP_KERNEL);
 	if (minor < 0) {
 		kfree(idxd_cdev);
@@ -268,12 +268,13 @@ int idxd_wq_add_cdev(struct idxd_wq *wq)
 	idxd_cdev->minor = minor;
 
 	device_initialize(dev);
-	dev->parent = wq_confdev(wq);
+	dev->parent = &wq->conf_dev;
 	dev->bus = &dsa_bus_type;
 	dev->type = &idxd_cdev_device_type;
 	dev->devt = MKDEV(MAJOR(cdev_ctx->devt), minor);
 
-	rc = dev_set_name(dev, "%s/wq%u.%u", idxd->data->name_prefix, idxd->id, wq->id);
+	rc = dev_set_name(dev, "%s/wq%u.%u", idxd_get_dev_name(idxd),
+			  idxd->id, wq->id);
 	if (rc < 0)
 		goto err;
 
@@ -296,69 +297,14 @@ int idxd_wq_add_cdev(struct idxd_wq *wq)
 void idxd_wq_del_cdev(struct idxd_wq *wq)
 {
 	struct idxd_cdev *idxd_cdev;
+	struct idxd_cdev_context *cdev_ctx;
 
+	cdev_ctx = &ictx[wq->idxd->type];
 	idxd_cdev = wq->idxd_cdev;
 	wq->idxd_cdev = NULL;
-	cdev_device_del(&idxd_cdev->cdev, cdev_dev(idxd_cdev));
-	put_device(cdev_dev(idxd_cdev));
+	cdev_device_del(&idxd_cdev->cdev, &idxd_cdev->dev);
+	put_device(&idxd_cdev->dev);
 }
-
-static int idxd_user_drv_probe(struct idxd_dev *idxd_dev)
-{
-	struct idxd_wq *wq = idxd_dev_to_wq(idxd_dev);
-	struct idxd_device *idxd = wq->idxd;
-	int rc;
-
-	if (idxd->state != IDXD_DEV_ENABLED)
-		return -ENXIO;
-
-	mutex_lock(&wq->wq_lock);
-	wq->type = IDXD_WQT_USER;
-	rc = drv_enable_wq(wq);
-	if (rc < 0)
-		goto err;
-
-	rc = idxd_wq_add_cdev(wq);
-	if (rc < 0) {
-		idxd->cmd_status = IDXD_SCMD_CDEV_ERR;
-		goto err_cdev;
-	}
-
-	idxd->cmd_status = 0;
-	mutex_unlock(&wq->wq_lock);
-	return 0;
-
-err_cdev:
-	drv_disable_wq(wq);
-err:
-	wq->type = IDXD_WQT_NONE;
-	mutex_unlock(&wq->wq_lock);
-	return rc;
-}
-
-static void idxd_user_drv_remove(struct idxd_dev *idxd_dev)
-{
-	struct idxd_wq *wq = idxd_dev_to_wq(idxd_dev);
-
-	mutex_lock(&wq->wq_lock);
-	idxd_wq_del_cdev(wq);
-	drv_disable_wq(wq);
-	wq->type = IDXD_WQT_NONE;
-	mutex_unlock(&wq->wq_lock);
-}
-
-static enum idxd_dev_type dev_types[] = {
-	IDXD_DEV_WQ,
-	IDXD_DEV_NONE,
-};
-
-struct idxd_device_driver idxd_user_drv = {
-	.probe = idxd_user_drv_probe,
-	.remove = idxd_user_drv_remove,
-	.name = "user",
-	.type = dev_types,
-};
-EXPORT_SYMBOL_GPL(idxd_user_drv);
 
 int idxd_cdev_register(void)
 {
@@ -369,16 +315,10 @@ int idxd_cdev_register(void)
 		rc = alloc_chrdev_region(&ictx[i].devt, 0, MINORMASK,
 					 ictx[i].name);
 		if (rc)
-			goto err_free_chrdev_region;
+			return rc;
 	}
 
 	return 0;
-
-err_free_chrdev_region:
-	for (i--; i >= 0; i--)
-		unregister_chrdev_region(ictx[i].devt, MINORMASK);
-
-	return rc;
 }
 
 void idxd_cdev_remove(void)

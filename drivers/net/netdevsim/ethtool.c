@@ -65,9 +65,7 @@ static int nsim_set_coalesce(struct net_device *dev,
 }
 
 static void nsim_get_ringparam(struct net_device *dev,
-			       struct ethtool_ringparam *ring,
-			       struct kernel_ethtool_ringparam *kernel_ring,
-			       struct netlink_ext_ack *extack)
+			       struct ethtool_ringparam *ring)
 {
 	struct netdevsim *ns = netdev_priv(dev);
 
@@ -75,16 +73,11 @@ static void nsim_get_ringparam(struct net_device *dev,
 }
 
 static int nsim_set_ringparam(struct net_device *dev,
-			      struct ethtool_ringparam *ring,
-			      struct kernel_ethtool_ringparam *kernel_ring,
-			      struct netlink_ext_ack *extack)
+			      struct ethtool_ringparam *ring)
 {
 	struct netdevsim *ns = netdev_priv(dev);
 
-	ns->ethtool.ring.rx_pending = ring->rx_pending;
-	ns->ethtool.ring.rx_jumbo_pending = ring->rx_jumbo_pending;
-	ns->ethtool.ring.rx_mini_pending = ring->rx_mini_pending;
-	ns->ethtool.ring.tx_pending = ring->tx_pending;
+	memcpy(&ns->ethtool.ring, ring, sizeof(ns->ethtool.ring));
 	return 0;
 }
 

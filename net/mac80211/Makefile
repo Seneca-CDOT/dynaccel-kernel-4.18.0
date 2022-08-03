@@ -34,8 +34,7 @@ mac80211-y := \
 	trace.o mlme.o \
 	tdls.o \
 	ocb.o \
-	airtime.o \
-	eht.o
+	airtime.o
 
 mac80211-$(CONFIG_MAC80211_LEDS) += led.o
 mac80211-$(CONFIG_MAC80211_DEBUGFS) += \

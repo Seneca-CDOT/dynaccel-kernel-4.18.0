@@ -12,6 +12,7 @@
 #include "vmx.h"
 
 #define VCPU_ID	   1
+#define PAGE_SIZE  4096
 #define MAXPHYADDR 36
 
 #define MEM_REGION_GVA	0x0000123456789000

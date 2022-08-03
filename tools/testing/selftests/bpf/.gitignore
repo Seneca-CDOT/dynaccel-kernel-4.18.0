@@ -39,4 +39,3 @@ test_cpp
 *.ko
 *.tmp
 xdpxceiver
-xdp_redirect_multi

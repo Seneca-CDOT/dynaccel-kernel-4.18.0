@@ -399,7 +399,7 @@ void arch_setup_new_exec(void)
 		clear_thread_flag(TIF_SSBD);
 		task_clear_spec_ssb_disable(current);
 		task_clear_spec_ssb_noexec(current);
-		speculation_ctrl_update(read_thread_flags());
+		speculation_ctrl_update(task_thread_info(current)->flags);
 	}
 }
 
@@ -603,7 +603,7 @@ static unsigned long speculation_ctrl_update_tif(struct task_struct *tsk)
 			clear_tsk_thread_flag(tsk, TIF_SPEC_IB);
 	}
 	/* Return the updated threadinfo flags*/
-	return read_task_thread_flags(tsk);
+	return task_thread_info(tsk)->flags;
 }
 
 void speculation_ctrl_update(unsigned long tif)
@@ -632,9 +632,8 @@ void __switch_to_xtra(struct task_struct *prev_p, struct task_struct *next_p)
 	prev = &prev_p->thread;
 	next = &next_p->thread;
 
-	tifn = read_task_thread_flags(next_p);
-	tifp = read_task_thread_flags(prev_p);
-
+	tifn = READ_ONCE(task_thread_info(next_p)->flags);
+	tifp = READ_ONCE(task_thread_info(prev_p)->flags);
 	switch_to_bitmap(prev, next, tifp, tifn);
 
 	propagate_user_return_notify(prev_p, next_p);

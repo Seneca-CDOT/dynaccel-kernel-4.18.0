@@ -33,4 +33,4 @@ obj-$(CONFIG_VEXPRESS_CONFIG)	+= vexpress-config.o
 obj-$(CONFIG_DA8XX_MSTPRI)	+= da8xx-mstpri.o
 
 # MHI
-obj-y				+= mhi/
+obj-$(CONFIG_MHI_BUS)		+= mhi/

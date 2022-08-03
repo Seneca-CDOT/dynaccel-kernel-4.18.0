@@ -161,21 +161,16 @@ static int nfs4_validate_fspath(struct dentry *dentry,
 	return 0;
 }
 
-size_t nfs_parse_server_name(char *string, size_t len, struct sockaddr *sa,
-			     size_t salen, struct net *net, int port)
+static size_t nfs_parse_server_name(char *string, size_t len,
+		struct sockaddr *sa, size_t salen, struct net *net)
 {
 	ssize_t ret;
 
 	ret = rpc_pton(net, string, len, sa, salen);
 	if (ret == 0) {
-		ret = rpc_uaddr2sockaddr(net, string, len, sa, salen);
-		if (ret == 0) {
-			ret = nfs_dns_resolve_name(net, string, len, sa, salen);
-			if (ret < 0)
-				ret = 0;
-		}
-	} else if (port) {
-		rpc_set_port(sa, port);
+		ret = nfs_dns_resolve_name(net, string, len, sa, salen);
+		if (ret < 0)
+			ret = 0;
 	}
 	return ret;
 }
@@ -330,7 +325,7 @@ static int try_location(struct fs_context *fc,
 			nfs_parse_server_name(buf->data, buf->len,
 					      &ctx->nfs_server.address,
 					      sizeof(ctx->nfs_server._address),
-					      fc->net_ns, 0);
+					      fc->net_ns);
 		if (ctx->nfs_server.addrlen == 0)
 			continue;
 
@@ -414,9 +409,6 @@ static int nfs_do_refmount(struct fs_context *fc, struct rpc_clnt *client)
 	fs_locations = kmalloc(sizeof(struct nfs4_fs_locations), GFP_KERNEL);
 	if (!fs_locations)
 		goto out_free;
-	fs_locations->fattr = nfs_alloc_fattr();
-	if (!fs_locations->fattr)
-		goto out_free_2;
 
 	/* Get locations */
 	dentry = ctx->clone_data.dentry;
@@ -427,16 +419,14 @@ static int nfs_do_refmount(struct fs_context *fc, struct rpc_clnt *client)
 	err = nfs4_proc_fs_locations(client, d_inode(parent), &dentry->d_name, fs_locations, page);
 	dput(parent);
 	if (err != 0)
-		goto out_free_3;
+		goto out_free_2;
 
 	err = -ENOENT;
 	if (fs_locations->nlocations <= 0 ||
 	    fs_locations->fs_path.ncomponents <= 0)
-		goto out_free_3;
+		goto out_free_2;
 
 	err = nfs_follow_referral(fc, fs_locations);
-out_free_3:
-	kfree(fs_locations->fattr);
 out_free_2:
 	kfree(fs_locations);
 out_free:
@@ -503,7 +493,7 @@ static int nfs4_try_replacing_one_location(struct nfs_server *server,
 			continue;
 
 		salen = nfs_parse_server_name(buf->data, buf->len,
-						sap, addr_bufsize, net, 0);
+						sap, addr_bufsize, net);
 		if (salen == 0)
 			continue;
 		rpc_set_port(sap, NFS_PORT);

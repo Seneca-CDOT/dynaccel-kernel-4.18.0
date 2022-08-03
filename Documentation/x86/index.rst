@@ -13,4 +13,3 @@ x86 architecture specifics
    sva
    elf_auxvec
    xstate
-   intel-hfi

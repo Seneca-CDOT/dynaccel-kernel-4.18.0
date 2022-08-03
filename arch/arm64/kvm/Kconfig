@@ -40,7 +40,6 @@ menuconfig KVM
 	select HAVE_KVM_VCPU_RUN_PID_CHANGE
 	select TASKSTATS
 	select TASK_DELAY_ACCT
-	select INTERVAL_TREE
 	---help---
 	  Support hosting virtualized guest machines.
 
