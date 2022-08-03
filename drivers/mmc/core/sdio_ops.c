@@ -15,6 +15,7 @@
 #include <linux/mmc/card.h>
 #include <linux/mmc/mmc.h>
 #include <linux/mmc/sdio.h>
+#include <linux/dynaccel.h>
 
 #include "core.h"
 #include "sdio_ops.h"
@@ -54,7 +55,7 @@ int mmc_send_io_op_cond(struct mmc_host *host, u32 ocr, u32 *rocr)
 
 		err = -ETIMEDOUT;
 
-		mmc_delay(10);
+		mmc_delay(10 * speedup_ratio);
 	}
 
 	if (rocr)

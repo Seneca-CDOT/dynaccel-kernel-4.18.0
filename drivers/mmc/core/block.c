@@ -38,6 +38,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/idr.h>
 #include <linux/debugfs.h>
+#include <linux/dynaccel.h>
 
 #include <linux/mmc/ioctl.h>
 #include <linux/mmc/card.h>

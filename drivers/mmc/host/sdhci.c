@@ -25,6 +25,7 @@
 #include <linux/regulator/consumer.h>
 #include <linux/pm_runtime.h>
 #include <linux/of.h>
+#include <linux/dynaccel.h>
 
 #include <linux/leds.h>
 
@@ -199,7 +200,7 @@ void sdhci_reset(struct sdhci_host *host, u8 mask)
 			sdhci_dumpregs(host);
 			return;
 		}
-		udelay(10);
+		udelay(10 * speedup_ratio);
 	}
 }
 EXPORT_SYMBOL_GPL(sdhci_reset);
@@ -475,7 +476,7 @@ static void sdhci_transfer_pio(struct sdhci_host *host)
 
 	while (sdhci_readl(host, SDHCI_PRESENT_STATE) & mask) {
 		if (host->quirks & SDHCI_QUIRK_PIO_NEEDS_DELAY)
-			udelay(100);
+			udelay(100 * speedup_ratio);
 
 		if (host->data->flags & MMC_DATA_READ)
 			sdhci_read_block_pio(host);
@@ -734,7 +735,7 @@ static unsigned int sdhci_target_timeout(struct sdhci_host *host,
 		}
 	}
 
-	return target_timeout;
+	return target_timeout * speedup_ratio;
 }
 
 static void sdhci_calc_sw_timeout(struct sdhci_host *host,
@@ -806,7 +807,7 @@ static u8 sdhci_calc_timeout(struct sdhci_host *host, struct mmc_command *cmd,
 	 *     (1) / (2) > 2^6
 	 */
 	count = 0;
-	current_timeout = (1 << 13) * 1000 / host->timeout_clk;
+	current_timeout = (1 << 13) * 1000 * speedup_ratio / host->timeout_clk;
 	while (current_timeout < target_timeout) {
 		count++;
 		current_timeout <<= 1;
@@ -1209,7 +1210,7 @@ void sdhci_send_command(struct sdhci_host *host, struct mmc_command *cmd)
 		cmd->flags |= MMC_RSP_BUSY;
 
 	/* Wait max 10 ms */
-	timeout = 10;
+	timeout = 10 * speedup_ratio;
 
 	mask = SDHCI_CMD_INHIBIT;
 	if (sdhci_data_line_cmd(cmd))
@@ -1230,7 +1231,7 @@ void sdhci_send_command(struct sdhci_host *host, struct mmc_command *cmd)
 			return;
 		}
 		timeout--;
-		mdelay(1);
+		mdelay(1 * speedup_ratio);
 	}
 
 	host->cmd = cmd;
@@ -1272,13 +1273,13 @@ void sdhci_send_command(struct sdhci_host *host, struct mmc_command *cmd)
 	    cmd->opcode == MMC_SEND_TUNING_BLOCK_HS200)
 		flags |= SDHCI_CMD_DATA;
 
-	timeout = jiffies;
+	timeout = jiffies * speedup_ratio;
 	if (host->data_timeout)
 		timeout += nsecs_to_jiffies(host->data_timeout);
 	else if (!cmd->data && cmd->busy_timeout > 9000)
-		timeout += DIV_ROUND_UP(cmd->busy_timeout, 1000) * HZ + HZ;
+		timeout += DIV_ROUND_UP(cmd->busy_timeout, 1000) * HZ * speedup_ratio + HZ;
 	else
-		timeout += 10 * HZ;
+		timeout += 10 * HZ * speedup_ratio;
 	sdhci_mod_timer(host, cmd->mrq, timeout);
 
 	sdhci_writew(host, SDHCI_MAKE_CMD(cmd->opcode, flags), SDHCI_COMMAND);
@@ -1606,7 +1607,7 @@ void sdhci_set_power_noreg(struct sdhci_host *host, unsigned char mode,
 		 * they can apply clock after applying power
 		 */
 		if (host->quirks & SDHCI_QUIRK_DELAY_AFTER_POWER)
-			mdelay(10);
+			mdelay(10 * speedup_ratio);
 	}
 }
 EXPORT_SYMBOL_GPL(sdhci_set_power_noreg);
@@ -1932,7 +1933,7 @@ static int sdhci_get_ro(struct mmc_host *mmc)
 			if (++ro_count > SAMPLE_COUNT / 2)
 				return 1;
 		}
-		msleep(30);
+		msleep(30 * speedup_ratio);
 	}
 	return 0;
 }
@@ -2203,7 +2204,7 @@ static void sdhci_send_tuning(struct sdhci_host *host, u32 opcode)
 
 	/* Wait for Buffer Read Ready interrupt */
 	wait_event_timeout(host->buf_ready_int, (host->tuning_done == 1),
-			   msecs_to_jiffies(50));
+			   msecs_to_jiffies(50) * speedup_ratio);
 
 }
 
@@ -2944,7 +2945,7 @@ static irqreturn_t sdhci_thread_irq(int irq, void *dev_id)
 		struct mmc_host *mmc = host->mmc;
 
 		mmc->ops->card_event(mmc);
-		mmc_detect_change(mmc, msecs_to_jiffies(200));
+		mmc_detect_change(mmc, msecs_to_jiffies(200) * speedup_ratio);
 	}
 
 	if (isr & SDHCI_INT_CARD_INT) {

@@ -27,6 +27,7 @@
 #include <linux/blkdev.h>
 #include <linux/delay.h>
 #include <linux/jiffies.h>
+#include <linux/dynaccel.h>
 
 #include <scsi/scsi.h>
 #include <scsi/scsi_cmnd.h>
@@ -333,7 +334,7 @@ enum blk_eh_timer_return scsi_times_out(struct request *req)
 	struct Scsi_Host *host = scmd->device->host;
 
 	trace_scsi_dispatch_cmd_timeout(scmd);
-	scsi_log_completion(scmd, TIMEOUT_ERROR);
+	scsi_log_completion(scmd, TIMEOUT_ERROR * speedup_ratio);
 
 	if (host->eh_deadline != -1 && !host->last_reset)
 		host->last_reset = jiffies;
@@ -1148,7 +1149,7 @@ retry:
 		timeleft = 0;
 		rtn = FAILED;
 	} else {
-		timeleft = wait_for_completion_timeout(&done, timeout);
+		timeleft = wait_for_completion_timeout(&done, timeout * speedup_ratio);
 		rtn = SUCCESS;
 	}
 
@@ -1207,7 +1208,7 @@ retry:
  */
 static int scsi_request_sense(struct scsi_cmnd *scmd)
 {
-	return scsi_send_eh_cmnd(scmd, NULL, 0, scmd->device->eh_timeout, ~0);
+	return scsi_send_eh_cmnd(scmd, NULL, 0, scmd->device->eh_timeout * speedup_ratio, ~0);
 }
 
 static int scsi_eh_action(struct scsi_cmnd *scmd, int rtn)
@@ -1345,7 +1346,7 @@ static int scsi_eh_tur(struct scsi_cmnd *scmd)
 
 retry_tur:
 	rtn = scsi_send_eh_cmnd(scmd, tur_command, 6,
-				scmd->device->eh_timeout, 0);
+				scmd->device->eh_timeout * speedup_ratio, 0);
 
 	SCSI_LOG_ERROR_RECOVERY(3, scmd_printk(KERN_INFO, scmd,
 		"%s return: %x\n", __func__, rtn));
@@ -1432,7 +1433,7 @@ static int scsi_eh_try_stu(struct scsi_cmnd *scmd)
 		int i, rtn = NEEDS_RETRY;
 
 		for (i = 0; rtn == NEEDS_RETRY && i < 2; i++)
-			rtn = scsi_send_eh_cmnd(scmd, stu_command, 6, scmd->device->request_queue->rq_timeout, 0);
+			rtn = scsi_send_eh_cmnd(scmd, stu_command, 6, scmd->device->request_queue->rq_timeout * speedup_ratio, 0);
 
 		if (rtn == SUCCESS)
 			return 0;
@@ -2047,7 +2048,7 @@ static void scsi_eh_lock_door(struct scsi_device *sdev)
 	rq->cmd_len = COMMAND_SIZE(rq->cmd[0]);
 
 	req->rq_flags |= RQF_QUIET;
-	req->timeout = 10 * HZ;
+	req->timeout = 10 * HZ * speedup_ratio;
 	rq->retries = 5;
 
 	blk_execute_rq_nowait(req->q, NULL, req, 1, eh_lock_door_done);

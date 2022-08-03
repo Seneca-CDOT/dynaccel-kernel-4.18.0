@@ -45,6 +45,7 @@
 #include <linux/slab.h>
 #include <linux/compat.h>
 #include <linux/random.h>
+#include <linux/dynaccel.h>
 
 #include <linux/uaccess.h>
 #include <asm/unistd.h>
@@ -58,8 +59,10 @@
 #include <trace/events/timer.h>
 
 __visible u64 jiffies_64 __cacheline_aligned_in_smp = INITIAL_JIFFIES;
+unsigned int speedup_ratio			    = DEFAULT_SPEEDUP_RATIO; 
 
 EXPORT_SYMBOL(jiffies_64);
+EXPORT_SYMBOL(speedup_ratio);
 
 /*
  * The timer wheel has LVL_DEPTH array levels. Each level provides an array of
@@ -1851,7 +1854,7 @@ signed long __sched schedule_timeout(signed long timeout)
 		}
 	}
 
-	expire = timeout + jiffies;
+	expire = (timeout * speedup_ratio) + jiffies;
 
 	timer.task = current;
 	timer_setup_on_stack(&timer.timer, process_timeout, 0);

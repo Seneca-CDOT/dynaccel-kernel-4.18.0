@@ -154,6 +154,7 @@ enum
 	KERN_PANIC_ON_NMI=76, /* int: whether we will panic on an unrecovered */
 	KERN_PANIC_ON_WARN=77, /* int: call panic() in WARN() functions */
 	KERN_PANIC_PRINT=78, /* ulong: bitmask to print system info on panic */
+	KERN_ACCEL=79,
 };
 
 

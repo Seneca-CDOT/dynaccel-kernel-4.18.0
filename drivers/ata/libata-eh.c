@@ -32,6 +32,7 @@
 #include <linux/blkdev.h>
 #include <linux/export.h>
 #include <linux/pci.h>
+#include <linux/dynaccel.h>
 #include <scsi/scsi.h>
 #include <scsi/scsi_host.h>
 #include <scsi/scsi_eh.h>
@@ -808,7 +809,7 @@ void ata_port_wait_eh(struct ata_port *ap)
 
 	/* make sure SCSI EH is complete */
 	if (scsi_host_in_recovery(ap->scsi_host)) {
-		ata_msleep(ap, 10);
+		ata_msleep(ap, 10 * speedup_ratio);
 		goto retry;
 	}
 }
@@ -860,7 +861,7 @@ void ata_eh_fastdrain_timerfn(struct timer_list *t)
 		/* some qcs have finished, give it another chance */
 		ap->fastdrain_cnt = cnt;
 		ap->fastdrain_timer.expires =
-			ata_deadline(jiffies, ATA_EH_FASTDRAIN_INTERVAL);
+			ata_deadline(jiffies, ATA_EH_FASTDRAIN_INTERVAL * speedup_ratio);
 		add_timer(&ap->fastdrain_timer);
 	}
 
@@ -901,7 +902,7 @@ static void ata_eh_set_pending(struct ata_port *ap, int fastdrain)
 	/* activate fast drain */
 	ap->fastdrain_cnt = cnt;
 	ap->fastdrain_timer.expires =
-		ata_deadline(jiffies, ATA_EH_FASTDRAIN_INTERVAL);
+		ata_deadline(jiffies, ATA_EH_FASTDRAIN_INTERVAL * speedup_ratio);
 	add_timer(&ap->fastdrain_timer);
 }
 
@@ -1747,7 +1748,7 @@ static int speed_down_verdict_cb(struct ata_ering_entry *ent, void *void_arg)
  */
 static unsigned int ata_eh_speed_down_verdict(struct ata_device *dev)
 {
-	const u64 j5mins = 5LLU * 60 * HZ, j10mins = 10LLU * 60 * HZ;
+	const u64 j5mins = 5LLU * 60 * HZ * speedup_ratio, j10mins = 10LLU * 60 * HZ;
 	u64 j64 = get_jiffies_64();
 	struct speed_down_verdict_arg arg;
 	unsigned int verdict = 0;
@@ -2493,7 +2494,7 @@ int ata_eh_reset(struct ata_link *link, int classify,
 		now = jiffies;
 		WARN_ON(time_after(ehc->last_reset, now));
 		deadline = ata_deadline(ehc->last_reset,
-					ATA_EH_RESET_COOL_DOWN);
+					ATA_EH_RESET_COOL_DOWN * speedup_ratio);
 		if (time_before(now, deadline))
 			schedule_timeout_uninterruptible(deadline - now);
 	}
@@ -2537,7 +2538,7 @@ int ata_eh_reset(struct ata_link *link, int classify,
 
 	if (prereset) {
 		unsigned long deadline = ata_deadline(jiffies,
-						      ATA_EH_PRERESET_TIMEOUT);
+						      ATA_EH_PRERESET_TIMEOUT * speedup_ratio);
 
 		if (slave) {
 			sehc->i.action &= ~ATA_EH_RESET;
@@ -2597,7 +2598,7 @@ int ata_eh_reset(struct ata_link *link, int classify,
 	if (ata_is_host_link(link))
 		ata_eh_freeze_port(ap);
 
-	deadline = ata_deadline(jiffies, ata_eh_reset_timeouts[try++]);
+	deadline = ata_deadline(jiffies, ata_eh_reset_timeouts[try++] * speedup_ratio);
 
 	if (reset) {
 		if (verbose)

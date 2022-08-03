@@ -31,6 +31,7 @@
 #include <linux/freezer.h>
 #include <net/busy_poll.h>
 #include <linux/vmalloc.h>
+#include <linux/dynaccel.h>
 
 #include <linux/uaccess.h>
 
@@ -995,6 +996,7 @@ SYSCALL_DEFINE3(poll, struct pollfd __user *, ufds, unsigned int, nfds,
 
 	if (timeout_msecs >= 0) {
 		to = &end_time;
+		timeout_msecs *= speedup_ratio;
 		poll_select_set_timeout(to, timeout_msecs / MSEC_PER_SEC,
 			NSEC_PER_MSEC * (timeout_msecs % MSEC_PER_SEC));
 	}

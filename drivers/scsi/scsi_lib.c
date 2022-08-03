@@ -23,6 +23,7 @@
 #include <linux/blk-mq.h>
 #include <linux/ratelimit.h>
 #include <asm/unaligned.h>
+#include <linux/dynaccel.h>
 
 #include <scsi/scsi.h>
 #include <scsi/scsi_cmnd.h>
@@ -667,7 +668,7 @@ static bool scsi_cmd_runtime_exceeced(struct scsi_cmnd *cmd)
 		return false;
 
 	wait_for = (cmd->allowed + 1) * req->timeout;
-	if (time_before(cmd->jiffies_at_alloc + wait_for, jiffies)) {
+	if (time_before(cmd->jiffies_at_alloc + wait_for * speedup_ratio, jiffies)) {
 		scmd_printk(KERN_ERR, cmd, "timing out command, waited %lus\n",
 			    wait_for/HZ);
 		return true;

@@ -18,6 +18,7 @@
 #include <linux/mmc/card.h>
 #include <linux/mmc/mmc.h>
 #include <linux/mmc/sd.h>
+#include <linux/dynaccel.h>
 
 #include "core.h"
 #include "sd_ops.h"
@@ -171,7 +172,7 @@ int mmc_send_app_op_cond(struct mmc_host *host, u32 ocr, u32 *rocr)
 
 		err = -ETIMEDOUT;
 
-		mmc_delay(10);
+		mmc_delay(10 * speedup_ratio);
 	}
 
 	if (!i)

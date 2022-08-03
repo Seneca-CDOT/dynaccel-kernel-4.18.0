@@ -14,6 +14,7 @@
 #include <linux/mmc/card.h>
 #include <linux/mmc/sdio.h>
 #include <linux/mmc/sdio_func.h>
+#include <linux/dynaccel.h>
 
 #include "sdio_ops.h"
 #include "core.h"
@@ -80,7 +81,7 @@ int sdio_enable_func(struct sdio_func *func)
 	if (ret)
 		goto err;
 
-	timeout = jiffies + msecs_to_jiffies(func->enable_timeout);
+	timeout = jiffies + msecs_to_jiffies(func->enable_timeout * speedup_ratio);
 
 	while (1) {
 		ret = mmc_io_rw_direct(func->card, 0, 0, SDIO_CCCR_IORx, 0, &reg);

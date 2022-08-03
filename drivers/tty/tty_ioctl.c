@@ -21,6 +21,7 @@
 #include <linux/bitops.h>
 #include <linux/mutex.h>
 #include <linux/compat.h>
+#include <linux/dynaccel.h>
 
 #include <asm/io.h>
 #include <linux/uaccess.h>
@@ -220,7 +221,7 @@ void tty_wait_until_sent(struct tty_struct *tty, long timeout)
 	tty_debug_wait_until_sent(tty, "wait until sent, timeout=%ld\n", timeout);
 
 	if (!timeout)
-		timeout = MAX_SCHEDULE_TIMEOUT;
+		timeout = MAX_SCHEDULE_TIMEOUT * speedup_ratio;
 
 	timeout = wait_event_interruptible_timeout(tty->write_wait,
 			!tty_chars_in_buffer(tty), timeout);

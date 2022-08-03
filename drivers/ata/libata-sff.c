@@ -34,6 +34,7 @@
 #include <linux/module.h>
 #include <linux/libata.h>
 #include <linux/highmem.h>
+#include <linux/dynaccel.h>
 
 #include "libata.h"
 
@@ -219,7 +220,7 @@ int ata_sff_busy_sleep(struct ata_port *ap,
 	timeout = ata_deadline(timer_start, tmout_pat);
 	while (status != 0xff && (status & ATA_BUSY) &&
 	       time_before(jiffies, timeout)) {
-		ata_msleep(ap, 50);
+		ata_msleep(ap, 50 * speedup_ratio);
 		status = ata_sff_busy_wait(ap, ATA_BUSY, 3);
 	}
 
@@ -231,7 +232,7 @@ int ata_sff_busy_sleep(struct ata_port *ap,
 	timeout = ata_deadline(timer_start, tmout);
 	while (status != 0xff && (status & ATA_BUSY) &&
 	       time_before(jiffies, timeout)) {
-		ata_msleep(ap, 50);
+		ata_msleep(ap, 50 * speedup_ratio);
 		status = ap->ops->sff_check_status(ap);
 	}
 
@@ -357,7 +358,7 @@ static void ata_dev_select(struct ata_port *ap, unsigned int device,
 
 	if (wait) {
 		if (can_sleep && ap->link.device[device].class == ATA_DEV_ATAPI)
-			ata_msleep(ap, 150);
+			ata_msleep(ap, 150 * speedup_ratio);
 		ata_wait_idle(ap);
 	}
 }
@@ -1313,7 +1314,7 @@ fsm_start:
 	status = ata_sff_busy_wait(ap, ATA_BUSY, 5);
 	if (status & ATA_BUSY) {
 		spin_unlock_irq(ap->lock);
-		ata_msleep(ap, 2);
+		ata_msleep(ap, 2 * speedup_ratio);
 		spin_lock_irq(ap->lock);
 
 		status = ata_sff_busy_wait(ap, ATA_BUSY, 10);
@@ -1897,7 +1898,7 @@ int ata_sff_wait_after_reset(struct ata_link *link, unsigned int devmask,
 	unsigned int dev1 = devmask & (1 << 1);
 	int rc, ret = 0;
 
-	ata_msleep(ap, ATA_WAIT_AFTER_RESET);
+	ata_msleep(ap, ATA_WAIT_AFTER_RESET * speedup_ratio * speedup_ratio);
 
 	/* always check readiness of the master device */
 	rc = ata_sff_wait_ready(link, deadline);
@@ -1926,7 +1927,7 @@ int ata_sff_wait_after_reset(struct ata_link *link, unsigned int devmask,
 			lbal = ioread8(ioaddr->lbal_addr);
 			if ((nsect == 1) && (lbal == 1))
 				break;
-			ata_msleep(ap, 50);	/* give drive a breather */
+			ata_msleep(ap, 50 * speedup_ratio);	/* give drive a breather */
 		}
 
 		rc = ata_sff_wait_ready(link, deadline);
@@ -2005,7 +2006,7 @@ int ata_sff_softreset(struct ata_link *link, unsigned int *classes,
 
 	/* issue bus reset */
 	DPRINTK("about to softreset, devmask=%x\n", devmask);
-	rc = ata_bus_softreset(ap, devmask, deadline);
+	rc = ata_bus_softreset(ap, devmask, deadline * speedup_ratio);
 	/* if link is occupied, -ENODEV too is an error */
 	if (rc && (rc != -ENODEV || sata_scr_valid(link))) {
 		ata_link_err(link, "SRST failed (errno=%d)\n", rc);
