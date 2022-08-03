@@ -60,6 +60,7 @@
 #include <linux/log2.h>
 #include <linux/slab.h>
 #include <linux/glob.h>
+#include <linux/dynaccel.h>
 #include <scsi/scsi.h>
 #include <scsi/scsi_cmnd.h>
 #include <scsi/scsi_host.h>
@@ -1573,7 +1574,7 @@ unsigned ata_exec_internal_sg(struct ata_device *dev,
 
 	if (!timeout) {
 		if (ata_probe_timeout)
-			timeout = ata_probe_timeout * 1000;
+			timeout = ata_probe_timeout * 1000 * speedup_ratio;
 		else {
 			timeout = ata_internal_cmd_timeout(dev, command);
 			auto_timeout = 1;
@@ -3587,9 +3588,9 @@ int ata_wait_ready(struct ata_link *link, unsigned long deadline,
 
 	/* choose which 0xff timeout to use, read comment in libata.h */
 	if (link->ap->host->flags & ATA_HOST_PARALLEL_SCAN)
-		nodev_deadline = ata_deadline(start, ATA_TMOUT_FF_WAIT_LONG);
+		nodev_deadline = ata_deadline(start, ATA_TMOUT_FF_WAIT_LONG * speedup_ratio);
 	else
-		nodev_deadline = ata_deadline(start, ATA_TMOUT_FF_WAIT);
+		nodev_deadline = ata_deadline(start, ATA_TMOUT_FF_WAIT * speedup_ratio);
 
 	/* Slave readiness can't be tested separately from master.  On
 	 * M/S emulation configuration, this function should be called
@@ -3633,15 +3634,15 @@ int ata_wait_ready(struct ata_link *link, unsigned long deadline,
 		if (time_after(now, deadline))
 			return -EBUSY;
 
-		if (!warned && time_after(now, start + 5 * HZ) &&
-		    (deadline - now > 3 * HZ)) {
+		if (!warned && time_after(now, start + 5 * HZ * speedup_ratio) &&
+		    (deadline - now > 3 * HZ * speedup_ratio)) {
 			ata_link_warn(link,
 				"link is slow to respond, please be patient "
 				"(ready=%d)\n", tmp);
 			warned = 1;
 		}
 
-		ata_msleep(link->ap, 50);
+		ata_msleep(link->ap, 50 * speedup_ratio);
 	}
 }
 
@@ -3662,7 +3663,7 @@ int ata_wait_ready(struct ata_link *link, unsigned long deadline,
 int ata_wait_after_reset(struct ata_link *link, unsigned long deadline,
 				int (*check_ready)(struct ata_link *link))
 {
-	ata_msleep(link->ap, ATA_WAIT_AFTER_RESET);
+	ata_msleep(link->ap, ATA_WAIT_AFTER_RESET * speedup_ratio);
 
 	return ata_wait_ready(link, deadline, check_ready);
 }
@@ -4443,7 +4444,7 @@ unsigned int ata_dev_set_feature(struct ata_device *dev, u8 enable, u8 feature)
 
 	if (enable == SETFEATURES_SPINUP)
 		timeout = ata_probe_timeout ?
-			  ata_probe_timeout * 1000 : SETFEATURES_SPINUP_TIMEOUT;
+			  ata_probe_timeout * 1000 * speedup_ratio: SETFEATURES_SPINUP_TIMEOUT * speedup_ratio;
 	err_mask = ata_exec_internal(dev, &tf, NULL, DMA_NONE, NULL, 0, timeout);
 
 	DPRINTK("EXIT, err_mask=%x\n", err_mask);
@@ -6566,7 +6567,7 @@ u32 ata_wait_register(struct ata_port *ap, void __iomem *reg, u32 mask, u32 val,
 	deadline = ata_deadline(jiffies, timeout);
 
 	while ((tmp & mask) == val && time_before(jiffies, deadline)) {
-		ata_msleep(ap, interval);
+		ata_msleep(ap, interval * speedup_ratio);
 		tmp = ioread32(reg);
 	}
 

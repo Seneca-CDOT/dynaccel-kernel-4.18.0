@@ -2,7 +2,7 @@
 VERSION = 4
 PATCHLEVEL = 18
 SUBLEVEL = 0
-EXTRAVERSION =
+EXTRAVERSION = -394.el8-dynaccel
 NAME = Merciless Moray
 
 #

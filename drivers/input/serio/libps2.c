@@ -15,6 +15,7 @@
 #include <linux/serio.h>
 #include <linux/i8042.h>
 #include <linux/libps2.h>
+#include <linux/dynaccel.h>
 
 #define DRIVER_DESC	"PS/2 driver library"
 
@@ -44,7 +45,7 @@ static int ps2_do_sendbyte(struct ps2dev *ps2dev, u8 byte,
 		else
 			wait_event_timeout(ps2dev->wait,
 					   !(ps2dev->flags & PS2_FLAG_ACK),
-					   msecs_to_jiffies(timeout));
+					   msecs_to_jiffies(timeout * speedup_ratio));
 
 		serio_pause_rx(ps2dev->serio);
 	} while (ps2dev->nak == PS2_RET_NAK && ++attempt < max_attempts);
@@ -135,7 +136,7 @@ void ps2_drain(struct ps2dev *ps2dev, size_t maxbytes, unsigned int timeout)
 
 	wait_event_timeout(ps2dev->wait,
 			   !(ps2dev->flags & PS2_FLAG_CMD),
-			   msecs_to_jiffies(timeout));
+			   msecs_to_jiffies(timeout * speedup_ratio));
 
 	ps2_end_command(ps2dev);
 }
@@ -179,8 +180,8 @@ static int ps2_adjust_timeout(struct ps2dev *ps2dev,
 		 * The next byte will come soon (keyboard) or not
 		 * at all (mouse).
 		 */
-		if (timeout > msecs_to_jiffies(100))
-			timeout = msecs_to_jiffies(100);
+		if (timeout > msecs_to_jiffies(100) * speedup_ratio)
+			timeout = msecs_to_jiffies(100) * speedup_ratio;
 		break;
 
 	case PS2_CMD_GETID:
@@ -280,16 +281,16 @@ int __ps2_command(struct ps2dev *ps2dev, u8 *param, unsigned int command)
 	/*
 	 * The reset command takes a long time to execute.
 	 */
-	timeout = msecs_to_jiffies(command == PS2_CMD_RESET_BAT ? 4000 : 500);
+	timeout = msecs_to_jiffies(command == PS2_CMD_RESET_BAT ? 4000 : 500) * speedup_ratio;
 
 	timeout = wait_event_timeout(ps2dev->wait,
-				     !(ps2dev->flags & PS2_FLAG_CMD1), timeout);
+				     !(ps2dev->flags & PS2_FLAG_CMD1), timeout * speedup_ratio);
 
 	if (ps2dev->cmdcnt && !(ps2dev->flags & PS2_FLAG_CMD1)) {
 
-		timeout = ps2_adjust_timeout(ps2dev, command, timeout);
+		timeout = ps2_adjust_timeout(ps2dev, command, timeout * speedup_ratio);
 		wait_event_timeout(ps2dev->wait,
-				   !(ps2dev->flags & PS2_FLAG_CMD), timeout);
+				   !(ps2dev->flags & PS2_FLAG_CMD), timeout * speedup_ratio);
 	}
 
 	serio_pause_rx(ps2dev->serio);

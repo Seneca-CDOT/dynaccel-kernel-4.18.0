@@ -24,6 +24,7 @@
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <linux/dynaccel.h>
 
 #define RNG_MODULE_NAME		"hw_random"
 
@@ -258,7 +259,7 @@ static ssize_t rng_dev_read(struct file *filp, char __user *buf,
 		put_rng(rng);
 
 		if (need_resched())
-			schedule_timeout_interruptible(1);
+			schedule_timeout_interruptible(1 * speedup_ratio);
 
 		if (signal_pending(current)) {
 			err = -ERESTARTSYS;

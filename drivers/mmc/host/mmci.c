@@ -37,6 +37,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/types.h>
 #include <linux/pinctrl/consumer.h>
+#include <linux/dynaccel.h>
 
 #include <asm/div64.h>
 #include <asm/io.h>
@@ -325,9 +326,9 @@ static void mmci_reg_delay(struct mmci_host *host)
 	 * Worst delay time when up and running is at 25 MHz => 120 ns.
 	 */
 	if (host->cclk < 25000000)
-		udelay(30);
+		udelay(30 * speedup_ratio);
 	else
-		ndelay(120);
+		ndelay(120 * speedup_ratio);
 }
 
 /*

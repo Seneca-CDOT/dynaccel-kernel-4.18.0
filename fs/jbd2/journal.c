@@ -41,6 +41,7 @@
 #include <linux/bitops.h>
 #include <linux/ratelimit.h>
 #include <linux/sched/mm.h>
+#include <linux/dynaccel.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/jbd2.h>
@@ -241,7 +242,7 @@ loop:
 			should_sleep = 0;
 		transaction = journal->j_running_transaction;
 		if (transaction && time_after_eq(jiffies,
-						transaction->t_expires))
+						transaction->t_expires * speedup_ratio))
 			should_sleep = 0;
 		if (journal->j_flags & JBD2_UNMOUNT)
 			should_sleep = 0;
@@ -259,7 +260,7 @@ loop:
 	 * Were we woken up by a commit wakeup event?
 	 */
 	transaction = journal->j_running_transaction;
-	if (transaction && time_after_eq(jiffies, transaction->t_expires)) {
+	if (transaction && time_after_eq(jiffies, transaction->t_expires * speedup_ratio)) {
 		journal->j_commit_request = transaction->t_tid;
 		jbd_debug(1, "woke because of timeout\n");
 	}

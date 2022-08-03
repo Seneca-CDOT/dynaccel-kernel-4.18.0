@@ -6,6 +6,7 @@
  * figure. Its a silly number but people think its important. We go through
  * great pains to make it work on big machines and tickless kernels.
  */
+#include <linux/dynaccel.h>
 #include "sched.h"
 
 /*
@@ -353,7 +354,7 @@ void calc_global_load(void)
 	long active, delta;
 
 	sample_window = READ_ONCE(calc_load_update);
-	if (time_before(jiffies, sample_window + 10))
+	if (time_before(jiffies, sample_window + 10 * speedup_ratio))
 		return;
 
 	/*

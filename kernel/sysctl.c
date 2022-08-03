@@ -68,6 +68,7 @@
 #include <linux/bpf.h>
 #include <linux/mount.h>
 #include <linux/pipe_fs_i.h>
+#include <linux/dynaccel.h>
 
 #include "../lib/kstrtox.h"
 
@@ -1292,6 +1293,14 @@ static struct ctl_table kern_table[] = {
 		.extra2		= SYSCTL_INT_MAX,
 	},
 #endif
+	{
+		//.ctl_name       = KERN_ACCEL,
+		.procname	= "accel",
+		.data 		= &speedup_ratio,
+		.maxlen		= sizeof (int),
+		.mode 		= 0644,
+		.proc_handler	= proc_dointvec,
+       	},
 	{ }
 };
 

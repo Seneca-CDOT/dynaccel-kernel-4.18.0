@@ -17,6 +17,7 @@
 #include <linux/module.h>
 #include <linux/rtc.h>
 #include <linux/sched/signal.h>
+#include <linux/dynaccel.h>
 #include "rtc-core.h"
 
 static dev_t rtc_devt;
@@ -61,7 +62,7 @@ static void rtc_uie_task(struct work_struct *work)
 	} else if (rtc->oldsecs != tm.tm_sec) {
 		num = (tm.tm_sec + 60 - rtc->oldsecs) % 60;
 		rtc->oldsecs = tm.tm_sec;
-		rtc->uie_timer.expires = jiffies + HZ - (HZ/10);
+		rtc->uie_timer.expires = (jiffies + HZ - (HZ/10)) * speedup_ratio;
 		rtc->uie_timer_active = 1;
 		rtc->uie_task_active = 0;
 		add_timer(&rtc->uie_timer);

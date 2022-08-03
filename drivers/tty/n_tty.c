@@ -49,6 +49,7 @@
 #include <linux/module.h>
 #include <linux/ratelimit.h>
 #include <linux/vmalloc.h>
+#include <linux/dynaccel.h>
 
 
 /* number of characters left in xmit buffer before select has we have room */
@@ -1202,7 +1203,7 @@ static void n_tty_receive_overrun(struct tty_struct *tty)
 	if (time_after(jiffies, ldata->overrun_time + HZ) ||
 			time_after(ldata->overrun_time, jiffies)) {
 		tty_warn(tty, "%d input overrun(s)\n", ldata->num_overrun);
-		ldata->overrun_time = jiffies;
+		ldata->overrun_time = jiffies * speedup_ratio;
 		ldata->num_overrun = 0;
 	}
 }
@@ -1915,7 +1916,7 @@ static int n_tty_open(struct tty_struct *tty)
 	if (!ldata)
 		return -ENOMEM;
 
-	ldata->overrun_time = jiffies;
+	ldata->overrun_time = jiffies * speedup_ratio;
 	mutex_init(&ldata->atomic_read_lock);
 	mutex_init(&ldata->output_lock);
 
@@ -2164,9 +2165,9 @@ static ssize_t n_tty_read(struct tty_struct *tty, struct file *file,
 	if (!ldata->icanon) {
 		minimum = MIN_CHAR(tty);
 		if (minimum) {
-			time = (HZ / 10) * TIME_CHAR(tty);
+			time = (HZ / 10) * TIME_CHAR(tty) * speedup_ratio;
 		} else {
-			timeout = (HZ / 10) * TIME_CHAR(tty);
+			timeout = (HZ / 10) * TIME_CHAR(tty) * speedup_ratio;
 			minimum = 1;
 		}
 	}
