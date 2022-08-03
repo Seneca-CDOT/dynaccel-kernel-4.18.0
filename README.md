@@ -1,5 +1,5 @@
 ### Dynamic Accelereted Linux kernel based on CentOS8s
-#### Version: 4.18.0-394.el8.x86_64
+#### Version: 4.18.0-408.el8.x86_64
 ---
 The idea originated from [this repository](https://github.com/ystk/dynamic-acceleration) </br>
 A presenation by the original authors (Toshiba) discribing this work is at [this PDF](https://elinux.org/images/6/6d/Linux_Kernel_Acceleration_for_Long-term_Testing.pdf)
