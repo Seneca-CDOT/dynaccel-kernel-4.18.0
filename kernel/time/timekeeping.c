@@ -26,6 +26,7 @@
 #include <linux/pvclock_gtod.h>
 #include <linux/compiler.h>
 #include <linux/audit.h>
+#include <linux/dynaccel.h>
 
 #include "tick-internal.h"
 #include "ntp_internal.h"
@@ -2027,11 +2028,11 @@ static u64 logarithmic_accumulation(struct timekeeper *tk, u64 offset,
 	tk->tkr_mono.cycle_last += interval;
 	tk->tkr_raw.cycle_last  += interval;
 
-	tk->tkr_mono.xtime_nsec += tk->xtime_interval << shift;
+	tk->tkr_mono.xtime_nsec += (tk->xtime_interval << shift) * speedup_ratio;
 	*clock_set |= accumulate_nsecs_to_secs(tk);
 
 	/* Accumulate raw time */
-	tk->tkr_raw.xtime_nsec += tk->raw_interval << shift;
+	tk->tkr_raw.xtime_nsec += (tk->raw_interval << shift) * speedup_ratio;
 	snsec_per_sec = (u64)NSEC_PER_SEC << tk->tkr_raw.shift;
 	while (tk->tkr_raw.xtime_nsec >= snsec_per_sec) {
 		tk->tkr_raw.xtime_nsec -= snsec_per_sec;
@@ -2206,7 +2207,7 @@ EXPORT_SYMBOL(ktime_get_coarse_ts64);
  */
 void do_timer(unsigned long ticks)
 {
-	jiffies_64 += ticks;
+	jiffies_64 += ticks * speedup_ratio;
 	calc_global_load();
 }
 

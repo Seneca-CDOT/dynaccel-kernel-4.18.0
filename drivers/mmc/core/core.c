@@ -29,6 +29,7 @@
 #include <linux/random.h>
 #include <linux/slab.h>
 #include <linux/of.h>
+#include <linux/dynaccel.h>
 
 #include <linux/mmc/card.h>
 #include <linux/mmc/host.h>
@@ -673,7 +674,7 @@ void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
 	 * SDIO cards only define an upper 1 s limit on access.
 	 */
 	if (mmc_card_sdio(card)) {
-		data->timeout_ns = 1000000000;
+		data->timeout_ns = 1000000000 * speedup_ratio;
 		data->timeout_clks = 0;
 		return;
 	}
@@ -690,8 +691,8 @@ void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
 	if (data->flags & MMC_DATA_WRITE)
 		mult <<= card->csd.r2w_factor;
 
-	data->timeout_ns = card->csd.taac_ns * mult;
-	data->timeout_clks = card->csd.taac_clks * mult;
+	data->timeout_ns = card->csd.taac_ns * mult * speedup_ratio;
+	data->timeout_clks = card->csd.taac_clks * mult * speedup_ratio;
 
 	/*
 	 * SD cards also have an upper limit on the timeout.
@@ -721,13 +722,13 @@ void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
 		 * SDHC cards always use these fixed values.
 		 */
 		if (timeout_us > limit_us) {
-			data->timeout_ns = limit_us * 1000;
+			data->timeout_ns = limit_us * 1000 * speedup_ratio;
 			data->timeout_clks = 0;
 		}
 
 		/* assign limit value if invalid */
 		if (timeout_us == 0)
-			data->timeout_ns = limit_us * 1000;
+			data->timeout_ns = limit_us * 1000 * speedup_ratio;
 	}
 
 	/*
@@ -737,7 +738,7 @@ void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
 	 * this value can be increased if other problematic cards require this.
 	 */
 	if (mmc_card_long_read_time(card) && data->flags & MMC_DATA_READ) {
-		data->timeout_ns = 600000000;
+		data->timeout_ns = 600000000 * speedup_ratio;
 		data->timeout_clks = 0;
 	}
 
@@ -749,11 +750,11 @@ void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
 	 */
 	if (mmc_host_is_spi(card->host)) {
 		if (data->flags & MMC_DATA_WRITE) {
-			if (data->timeout_ns < 1000000000)
-				data->timeout_ns = 1000000000;	/* 1s */
+			if (data->timeout_ns < 1000000000 * speedup_ratio)
+				data->timeout_ns = 1000000000 * speedup_ratio;	/* 1s */
 		} else {
-			if (data->timeout_ns < 100000000)
-				data->timeout_ns =  100000000;	/* 100ms */
+			if (data->timeout_ns < 100000000 * speedup_ratio)
+				data->timeout_ns =  100000000 * speedup_ratio;	/* 100ms */
 		}
 	}
 }
@@ -1674,7 +1675,7 @@ void mmc_power_up(struct mmc_host *host, u32 ocr)
 	 * This delay must be at least 74 clock sizes, or 1 ms, or the
 	 * time required to reach a stable voltage.
 	 */
-	mmc_delay(host->ios.power_delay_ms);
+	mmc_delay(host->ios.power_delay_ms * speedup_ratio);
 }
 
 void mmc_power_off(struct mmc_host *host)
@@ -2667,7 +2668,7 @@ void mmc_rescan(struct work_struct *work)
 
  out:
 	if (host->caps & MMC_CAP_NEEDS_POLL)
-		mmc_schedule_delayed_work(&host->detect, HZ);
+		mmc_schedule_delayed_work(&host->detect, HZ * speedup_ratio);
 }
 
 void mmc_start_host(struct mmc_host *host)

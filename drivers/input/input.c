@@ -24,6 +24,7 @@
 #include <linux/mutex.h>
 #include <linux/rcupdate.h>
 #include "input-compat.h"
+#include <linux/dynaccel.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 MODULE_DESCRIPTION("Input core");
@@ -75,7 +76,7 @@ static void input_start_autorepeat(struct input_dev *dev, int code)
 	    dev->timer.function) {
 		dev->repeat_key = code;
 		mod_timer(&dev->timer,
-			  jiffies + msecs_to_jiffies(dev->rep[REP_DELAY]));
+			  jiffies + msecs_to_jiffies(dev->rep[REP_DELAY]) * speedup_ratio);
 	}
 }
 
@@ -193,7 +194,7 @@ static void input_repeat_key(struct timer_list *t)
 
 		if (dev->rep[REP_PERIOD])
 			mod_timer(&dev->timer, jiffies +
-					msecs_to_jiffies(dev->rep[REP_PERIOD]));
+					msecs_to_jiffies(dev->rep[REP_PERIOD]) * speedup_ratio);
 	}
 
 	spin_unlock_irqrestore(&dev->event_lock, flags);

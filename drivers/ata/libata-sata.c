@@ -9,6 +9,7 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/dynaccel.h>
 #include <scsi/scsi_cmnd.h>
 #include <scsi/scsi_device.h>
 #include <linux/libata.h>
@@ -251,7 +252,7 @@ int sata_link_debounce(struct ata_link *link, const unsigned long *params,
 	last_jiffies = jiffies;
 
 	while (1) {
-		ata_msleep(link->ap, interval);
+		ata_msleep(link->ap, interval * speedup_ratio);
 		if ((rc = sata_scr_read(link, SCR_STATUS, &cur)))
 			return rc;
 		cur &= 0xf;
@@ -261,7 +262,7 @@ int sata_link_debounce(struct ata_link *link, const unsigned long *params,
 			if (cur == 1 && time_before(jiffies, deadline))
 				continue;
 			if (time_after(jiffies,
-				       ata_deadline(last_jiffies, duration)))
+				       ata_deadline(last_jiffies, duration * speedup_ratio)))
 				return 0;
 			continue;
 		}
@@ -318,7 +319,7 @@ int sata_link_resume(struct ata_link *link, const unsigned long *params,
 		 * debouncing.
 		 */
 		if (!(link->flags & ATA_LFLAG_NO_DB_DELAY))
-			ata_msleep(link->ap, 200);
+			ata_msleep(link->ap, 200 * speedup_ratio);
 
 		/* is SControl restored correctly? */
 		if ((rc = sata_scr_read(link, SCR_CONTROL, &scontrol)))
@@ -567,7 +568,7 @@ int sata_link_hardreset(struct ata_link *link, const unsigned long *timing,
 	/* Couldn't find anything in SATA I/II specs, but AHCI-1.1
 	 * 10.4.2 says at least 1 ms.
 	 */
-	ata_msleep(link->ap, 1);
+	ata_msleep(link->ap, 1 * speedup_ratio);
 
 	/* bring link back */
 	rc = sata_link_resume(link, timing, deadline);
@@ -591,7 +592,7 @@ int sata_link_hardreset(struct ata_link *link, const unsigned long *timing,
 			unsigned long pmp_deadline;
 
 			pmp_deadline = ata_deadline(jiffies,
-						    ATA_TMOUT_PMP_SRST_WAIT);
+						    ATA_TMOUT_PMP_SRST_WAIT * speedup_ratio);
 			if (time_after(pmp_deadline, deadline))
 				pmp_deadline = deadline;
 			ata_wait_ready(link, pmp_deadline, check_ready);

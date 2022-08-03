@@ -28,6 +28,7 @@
 #include <linux/signal.h>
 #include <linux/suspend.h>
 #include <linux/timex.h>
+#include <linux/dynaccel.h>
 
 #include <asm/io.h>
 #include <linux/uaccess.h>
@@ -404,7 +405,7 @@ int vt_ioctl(struct tty_struct *tty,
 		 * Generate the tone for the appropriate number of ticks.
 		 * If the time is zero, turn off sound ourselves.
 		 */
-		ticks = msecs_to_jiffies((arg >> 16) & 0xffff);
+		ticks = msecs_to_jiffies(((arg >> 16) & 0xffff) * speedup_ratio);
 		count = ticks ? (arg & 0xffff) : 0;
 		if (count)
 			count = PIT_TICK_RATE / count;

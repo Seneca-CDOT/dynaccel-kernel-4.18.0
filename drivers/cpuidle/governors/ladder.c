@@ -81,7 +81,7 @@ static int ladder_select_state(struct cpuidle_driver *drv,
 
 	last_state = &ldev->states[last_idx];
 
-	last_residency = dev->last_residency_ns - drv->states[last_idx].exit_latency_ns;
+	last_residency = dev->rh_cpuidle_dev.last_residency_ns  - drv->states[last_idx].exit_latency_ns;
 
 	/* consider promotion */
 	if (last_idx < drv->state_count - 1 &&

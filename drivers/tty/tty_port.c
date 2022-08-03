@@ -18,6 +18,7 @@
 #include <linux/delay.h>
 #include <linux/module.h>
 #include <linux/serdev.h>
+#include <linux/dynaccel.h>
 
 static int tty_port_default_receive_buf(struct tty_port *port,
 					const unsigned char *p,
@@ -553,7 +554,7 @@ static void tty_port_drain_delay(struct tty_port *port, struct tty_struct *tty)
 	long timeout;
 
 	if (bps > 1200) {
-		timeout = (HZ * 10 * port->drain_delay) / bps;
+		timeout = (HZ * 10 * port->drain_delay * speedup_ratio) / bps;
 		timeout = max_t(long, timeout, HZ / 10);
 	} else {
 		timeout = 2 * HZ;
@@ -620,7 +621,7 @@ void tty_port_close_end(struct tty_port *port, struct tty_struct *tty)
 	if (port->blocked_open) {
 		spin_unlock_irqrestore(&port->lock, flags);
 		if (port->close_delay)
-			msleep_interruptible(jiffies_to_msecs(port->close_delay));
+			msleep_interruptible(jiffies_to_msecs(port->close_delay * speedup_ratio));
 		spin_lock_irqsave(&port->lock, flags);
 		wake_up_interruptible(&port->open_wait);
 	}

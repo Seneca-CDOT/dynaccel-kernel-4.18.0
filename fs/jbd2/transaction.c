@@ -27,6 +27,7 @@
 #include <linux/bug.h>
 #include <linux/module.h>
 #include <linux/sched/mm.h>
+#include <linux/dynaccel.h>
 
 #include <trace/events/jbd2.h>
 
@@ -106,7 +107,7 @@ static void jbd2_get_transaction(journal_t *journal,
 	transaction->t_state = T_RUNNING;
 	transaction->t_start_time = ktime_get();
 	transaction->t_tid = journal->j_transaction_sequence++;
-	transaction->t_expires = jiffies + journal->j_commit_interval;
+	transaction->t_expires = jiffies + journal->j_commit_interval * speedup_ratio; 
 	spin_lock_init(&transaction->t_handle_lock);
 	atomic_set(&transaction->t_updates, 0);
 	atomic_set(&transaction->t_outstanding_credits,

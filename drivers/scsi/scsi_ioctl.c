@@ -14,6 +14,7 @@
 #include <linux/mm.h>
 #include <linux/string.h>
 #include <linux/uaccess.h>
+#include <linux/dynaccel.h>
 
 #include <scsi/scsi.h>
 #include <scsi/scsi_cmnd.h>
@@ -155,7 +156,7 @@ int scsi_set_medium_removal(struct scsi_device *sdev, char state)
 	scsi_cmd[5] = 0;
 
 	ret = ioctl_internal_command(sdev, scsi_cmd,
-			IOCTL_NORMAL_TIMEOUT, NORMAL_RETRIES);
+			IOCTL_NORMAL_TIMEOUT * speedup_ratio, NORMAL_RETRIES);
 	if (ret == 0)
 		sdev->locked = (state == SCSI_REMOVAL_PREVENT);
 	return ret;
@@ -246,7 +247,7 @@ int scsi_ioctl(struct scsi_device *sdev, int cmd, void __user *arg)
 	case SCSI_IOCTL_DOORUNLOCK:
 		return scsi_set_medium_removal(sdev, SCSI_REMOVAL_ALLOW);
 	case SCSI_IOCTL_TEST_UNIT_READY:
-		return scsi_test_unit_ready(sdev, IOCTL_NORMAL_TIMEOUT,
+		return scsi_test_unit_ready(sdev, IOCTL_NORMAL_TIMEOUT * speedup_ratio,
 					    NORMAL_RETRIES, &sense_hdr);
 	case SCSI_IOCTL_START_UNIT:
 		scsi_cmd[0] = START_STOP;
@@ -254,14 +255,14 @@ int scsi_ioctl(struct scsi_device *sdev, int cmd, void __user *arg)
 		scsi_cmd[2] = scsi_cmd[3] = scsi_cmd[5] = 0;
 		scsi_cmd[4] = 1;
 		return ioctl_internal_command(sdev, scsi_cmd,
-				     START_STOP_TIMEOUT, NORMAL_RETRIES);
+				     START_STOP_TIMEOUT * speedup_ratio, NORMAL_RETRIES);
 	case SCSI_IOCTL_STOP_UNIT:
 		scsi_cmd[0] = START_STOP;
 		scsi_cmd[1] = 0;
 		scsi_cmd[2] = scsi_cmd[3] = scsi_cmd[5] = 0;
 		scsi_cmd[4] = 0;
 		return ioctl_internal_command(sdev, scsi_cmd,
-				     START_STOP_TIMEOUT, NORMAL_RETRIES);
+				     START_STOP_TIMEOUT * speedup_ratio, NORMAL_RETRIES);
         case SCSI_IOCTL_GET_PCI:
                 return scsi_ioctl_get_pci(sdev, arg);
 	case SG_SCSI_RESET:

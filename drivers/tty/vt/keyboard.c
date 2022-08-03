@@ -45,6 +45,7 @@
 #include <linux/notifier.h>
 #include <linux/jiffies.h>
 #include <linux/uaccess.h>
+#include <linux/dynaccel.h>
 
 #include <asm/irq_regs.h>
 
@@ -264,7 +265,7 @@ void kd_mksound(unsigned int hz, unsigned int ticks)
 	input_handler_for_each_handle(&kbd_handler, &hz, kd_sound_helper);
 
 	if (hz && ticks)
-		mod_timer(&kd_mksound_timer, jiffies + ticks);
+		mod_timer(&kd_mksound_timer, jiffies + ticks * speedup_ratio);
 }
 EXPORT_SYMBOL(kd_mksound);
 
@@ -940,7 +941,7 @@ static void k_brl(struct vc_data *vc, unsigned char value, char up_flag)
 	} else if (brl_timeout) {
 		if (!committing ||
 		    time_after(jiffies,
-			       releasestart + msecs_to_jiffies(brl_timeout))) {
+			       releasestart + msecs_to_jiffies(brl_timeout * speedup_ratio))) {
 			committing = pressed;
 			releasestart = jiffies;
 		}

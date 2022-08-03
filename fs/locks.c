@@ -127,6 +127,7 @@
 #include <linux/pid_namespace.h>
 #include <linux/hashtable.h>
 #include <linux/percpu.h>
+#include <linux/dynaccel.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/filelock.h>
@@ -1488,7 +1489,7 @@ int __break_lease(struct inode *inode, unsigned int mode, unsigned int type)
 
 	break_time = 0;
 	if (lease_break_time > 0) {
-		break_time = jiffies + lease_break_time * HZ;
+		break_time = jiffies + (lease_break_time * HZ) * speedup_ratio;
 		if (break_time == 0)
 			break_time++;	/* so that 0 means no break time */
 	}
