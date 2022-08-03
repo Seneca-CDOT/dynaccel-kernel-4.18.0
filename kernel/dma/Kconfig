@@ -1,0 +1,148 @@
+
+config HAS_DMA
+	bool
+	depends on !NO_DMA
+	default y
+
+#
+# IOMMU drivers that can bypass the IOMMU code and optionally use the direct
+# mapping fast path should select this option and set the dma_ops_bypass
+# flag in struct device where applicable
+#
+config DMA_OPS_BYPASS
+	bool
+
+config DMA_OPS
+	bool
+
+# Lets platform IOMMU driver choose between bypass and IOMMU
+config ARCH_HAS_DMA_MAP_DIRECT
+	bool
+
+config NEED_SG_DMA_LENGTH
+	bool
+
+config NEED_DMA_MAP_STATE
+	bool
+
+config ARCH_DMA_ADDR_T_64BIT
+	def_bool 64BIT || PHYS_ADDR_T_64BIT
+
+config ARCH_HAS_DMA_SET_MASK
+	bool
+
+#
+# Select this option if the architecture needs special handling for
+# DMA_ATTR_WRITE_COMBINE.  Normally the "uncached" mapping should be what
+# people thing of when saying write combine, so very few platforms should
+# need to enable this.
+#
+config ARCH_HAS_DMA_WRITE_COMBINE
+	bool
+
+#
+# Select if the architectures provides the arch_dma_mark_clean hook
+#
+config ARCH_HAS_DMA_MARK_CLEAN
+	bool
+
+config HAVE_GENERIC_DMA_COHERENT
+	bool
+
+config ARCH_HAS_SETUP_DMA_OPS
+	bool
+
+config ARCH_HAS_SYNC_DMA_FOR_DEVICE
+	bool
+
+config ARCH_HAS_SYNC_DMA_FOR_CPU
+	bool
+	select NEED_DMA_MAP_STATE
+
+config ARCH_HAS_SYNC_DMA_FOR_CPU_ALL
+	bool
+
+config ARCH_HAS_DMA_PREP_COHERENT
+	bool
+
+config ARCH_HAS_FORCE_DMA_UNENCRYPTED
+	bool
+
+config DMA_NONCOHERENT_CACHE_SYNC
+	bool
+
+config DMA_VIRT_OPS
+	bool
+	depends on HAS_DMA
+	select DMA_OPS
+
+config SWIOTLB
+	bool
+	select NEED_DMA_MAP_STATE
+
+config DMA_RESTRICTED_POOL
+	bool "DMA Restricted Pool"
+	depends on OF && OF_RESERVED_MEM && SWIOTLB
+	help
+	  This enables support for restricted DMA pools which provide a level of
+	  DMA memory protection on systems with limited hardware protection
+	  capabilities, such as those lacking an IOMMU.
+
+	  For more information see
+	  <Documentation/devicetree/bindings/reserved-memory/reserved-memory.txt>
+	  and <kernel/dma/swiotlb.c>.
+	  If unsure, say "n".
+
+#
+# Should be selected if we can mmap non-coherent mappings to userspace.
+# The only thing that is really required is a way to set an uncached bit
+# in the pagetables
+#
+config DMA_NONCOHERENT_MMAP
+	default y if !MMU
+	bool
+
+config DMA_COHERENT_POOL
+	select GENERIC_ALLOCATOR
+	bool
+
+config DMA_REMAP
+	bool
+	depends on MMU
+	select DMA_NONCOHERENT_MMAP
+
+config DMA_DIRECT_REMAP
+	bool
+	select DMA_REMAP
+	select DMA_COHERENT_POOL
+
+config DMA_API_DEBUG
+	bool "Enable debugging of DMA-API usage"
+	select NEED_DMA_MAP_STATE
+	help
+	  Enable this option to debug the use of the DMA API by device drivers.
+	  With this option you will be able to detect common bugs in device
+	  drivers like double-freeing of DMA mappings or freeing mappings that
+	  were never allocated.
+
+	  This option causes a performance degradation.  Use only if you want to
+	  debug device drivers and dma interactions.
+
+	  If unsure, say N.
+
+config DMA_API_DEBUG_SG
+	bool "Debug DMA scatter-gather usage"
+	default y
+	depends on DMA_API_DEBUG
+	help
+	  Perform extra checking that callers of dma_map_sg() have respected the
+	  appropriate segment length/boundary limits for the given device when
+	  preparing DMA scatterlists.
+
+	  This is particularly likely to have been overlooked in cases where the
+	  dma_map_sg() API is used for general bulk mapping of pages rather than
+	  preparing literal scatter-gather descriptors, where there is a risk of
+	  unexpected behaviour from DMA API implementations if the scatterlist
+	  is technically out-of-spec.
+
+	  If unsure, say N.
