@@ -1,0 +1,2538 @@
+From 2b9fb2509c5c9ca895c39461e6d86ca823e52f81 Mon Sep 17 00:00:00 2001
+From: Dezzir <deezzir@gmail.com>
+Date: Tue, 2 Aug 2022 22:21:05 -0400
+Subject: [PATCH] dynaccel patches applied
+
+---
+ COPYING                            |  676 ++-
+ Kconfig                            |    7 +-
+ Makefile                           |    2 +-
+ README                             |   19 -
+ README.md                          |    9 +
+ drivers/ata/libata-core.c          |   19 +-
+ drivers/ata/libata-eh.c            |   15 +-
+ drivers/ata/libata-sata.c          |   11 +-
+ drivers/ata/libata-scsi.c          |   11 +-
+ drivers/ata/libata-sff.c           |   15 +-
+ drivers/char/hw_random/core.c      |    3 +-
+ drivers/cpuidle/governors/ladder.c |    2 +-
+ drivers/input/input.c              |    5 +-
+ drivers/input/keyboard/atkbd.c     |   11 +-
+ drivers/input/serio/libps2.c       |   17 +-
+ drivers/mmc/core/block.c           |    1 +
+ drivers/mmc/core/core.c            |   25 +-
+ drivers/mmc/core/mmc_ops.c         |    9 +-
+ drivers/mmc/core/sd_ops.c          |    3 +-
+ drivers/mmc/core/sdio_cis.c        |    3 +-
+ drivers/mmc/core/sdio_io.c         |    3 +-
+ drivers/mmc/core/sdio_irq.c        |    7 +-
+ drivers/mmc/core/sdio_ops.c        |    3 +-
+ drivers/mmc/host/mmci.c            |    5 +-
+ drivers/mmc/host/sdhci.c           |   27 +-
+ drivers/rtc/rtc-dev.c              |    3 +-
+ drivers/scsi/scsi_error.c          |   13 +-
+ drivers/scsi/scsi_ioctl.c          |    9 +-
+ drivers/scsi/scsi_lib.c            |    3 +-
+ drivers/scsi/scsi_sysfs.c          |    3 +-
+ drivers/scsi/sd.c                  |   43 +-
+ drivers/tty/n_tty.c                |    9 +-
+ drivers/tty/tty_ioctl.c            |    3 +-
+ drivers/tty/tty_port.c             |    5 +-
+ drivers/tty/vt/keyboard.c          |    5 +-
+ drivers/tty/vt/vt.c                |    9 +-
+ drivers/tty/vt/vt_ioctl.c          |    3 +-
+ fs/jbd2/journal.c                  |    5 +-
+ fs/jbd2/transaction.c              |    3 +-
+ fs/locks.c                         |    3 +-
+ fs/select.c                        |    2 +
+ include/linux/dynaccel.h           |   16 +
+ include/uapi/linux/sysctl.h        |    1 +
+ kernel/sched/loadavg.c             |    3 +-
+ kernel/sysctl.c                    |    9 +
+ kernel/time/timekeeping.c          |    7 +-
+ kernel/time/timer.c                |    5 +-
+ 47 files changed, 894 insertions(+), 176 deletions(-)
+ delete mode 100644 README
+ create mode 100644 README.md
+ create mode 100644 include/linux/dynaccel.h
+
+diff --git a/COPYING b/COPYING
+index da4cb28fe..f288702d2 100644
+--- a/COPYING
++++ b/COPYING
+@@ -1,18 +1,674 @@
+-The Linux Kernel is provided under:
++                    GNU GENERAL PUBLIC LICENSE
++                       Version 3, 29 June 2007
+ 
+-	SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note
++ Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
++ Everyone is permitted to copy and distribute verbatim copies
++ of this license document, but changing it is not allowed.
+ 
+-Being under the terms of the GNU General Public License version 2 only,
+-according with:
++                            Preamble
+ 
+-	LICENSES/preferred/GPL-2.0
++  The GNU General Public License is a free, copyleft license for
++software and other kinds of works.
+ 
+-With an explicit syscall exception, as stated at:
++  The licenses for most software and other practical works are designed
++to take away your freedom to share and change the works.  By contrast,
++the GNU General Public License is intended to guarantee your freedom to
++share and change all versions of a program--to make sure it remains free
++software for all its users.  We, the Free Software Foundation, use the
++GNU General Public License for most of our software; it applies also to
++any other work released this way by its authors.  You can apply it to
++your programs, too.
+ 
+-	LICENSES/exceptions/Linux-syscall-note
++  When we speak of free software, we are referring to freedom, not
++price.  Our General Public Licenses are designed to make sure that you
++have the freedom to distribute copies of free software (and charge for
++them if you wish), that you receive source code or can get it if you
++want it, that you can change the software or use pieces of it in new
++free programs, and that you know you can do these things.
+ 
+-In addition, other licenses may also apply. Please see:
++  To protect your rights, we need to prevent others from denying you
++these rights or asking you to surrender the rights.  Therefore, you have
++certain responsibilities if you distribute copies of the software, or if
++you modify it: responsibilities to respect the freedom of others.
+ 
+-	Documentation/process/license-rules.rst
++  For example, if you distribute copies of such a program, whether
++gratis or for a fee, you must pass on to the recipients the same
++freedoms that you received.  You must make sure that they, too, receive
++or can get the source code.  And you must show them these terms so they
++know their rights.
+ 
+-for more details.
++  Developers that use the GNU GPL protect your rights with two steps:
++(1) assert copyright on the software, and (2) offer you this License
++giving you legal permission to copy, distribute and/or modify it.
++
++  For the developers' and authors' protection, the GPL clearly explains
++that there is no warranty for this free software.  For both users' and
++authors' sake, the GPL requires that modified versions be marked as
++changed, so that their problems will not be attributed erroneously to
++authors of previous versions.
++
++  Some devices are designed to deny users access to install or run
++modified versions of the software inside them, although the manufacturer
++can do so.  This is fundamentally incompatible with the aim of
++protecting users' freedom to change the software.  The systematic
++pattern of such abuse occurs in the area of products for individuals to
++use, which is precisely where it is most unacceptable.  Therefore, we
++have designed this version of the GPL to prohibit the practice for those
++products.  If such problems arise substantially in other domains, we
++stand ready to extend this provision to those domains in future versions
++of the GPL, as needed to protect the freedom of users.
++
++  Finally, every program is threatened constantly by software patents.
++States should not allow patents to restrict development and use of
++software on general-purpose computers, but in those that do, we wish to
++avoid the special danger that patents applied to a free program could
++make it effectively proprietary.  To prevent this, the GPL assures that
++patents cannot be used to render the program non-free.
++
++  The precise terms and conditions for copying, distribution and
++modification follow.
++
++                       TERMS AND CONDITIONS
++
++  0. Definitions.
++
++  "This License" refers to version 3 of the GNU General Public License.
++
++  "Copyright" also means copyright-like laws that apply to other kinds of
++works, such as semiconductor masks.
++
++  "The Program" refers to any copyrightable work licensed under this
++License.  Each licensee is addressed as "you".  "Licensees" and
++"recipients" may be individuals or organizations.
++
++  To "modify" a work means to copy from or adapt all or part of the work
++in a fashion requiring copyright permission, other than the making of an
++exact copy.  The resulting work is called a "modified version" of the
++earlier work or a work "based on" the earlier work.
++
++  A "covered work" means either the unmodified Program or a work based
++on the Program.
++
++  To "propagate" a work means to do anything with it that, without
++permission, would make you directly or secondarily liable for
++infringement under applicable copyright law, except executing it on a
++computer or modifying a private copy.  Propagation includes copying,
++distribution (with or without modification), making available to the
++public, and in some countries other activities as well.
++
++  To "convey" a work means any kind of propagation that enables other
++parties to make or receive copies.  Mere interaction with a user through
++a computer network, with no transfer of a copy, is not conveying.
++
++  An interactive user interface displays "Appropriate Legal Notices"
++to the extent that it includes a convenient and prominently visible
++feature that (1) displays an appropriate copyright notice, and (2)
++tells the user that there is no warranty for the work (except to the
++extent that warranties are provided), that licensees may convey the
++work under this License, and how to view a copy of this License.  If
++the interface presents a list of user commands or options, such as a
++menu, a prominent item in the list meets this criterion.
++
++  1. Source Code.
++
++  The "source code" for a work means the preferred form of the work
++for making modifications to it.  "Object code" means any non-source
++form of a work.
++
++  A "Standard Interface" means an interface that either is an official
++standard defined by a recognized standards body, or, in the case of
++interfaces specified for a particular programming language, one that
++is widely used among developers working in that language.
++
++  The "System Libraries" of an executable work include anything, other
++than the work as a whole, that (a) is included in the normal form of
++packaging a Major Component, but which is not part of that Major
++Component, and (b) serves only to enable use of the work with that
++Major Component, or to implement a Standard Interface for which an
++implementation is available to the public in source code form.  A
++"Major Component", in this context, means a major essential component
++(kernel, window system, and so on) of the specific operating system
++(if any) on which the executable work runs, or a compiler used to
++produce the work, or an object code interpreter used to run it.
++
++  The "Corresponding Source" for a work in object code form means all
++the source code needed to generate, install, and (for an executable
++work) run the object code and to modify the work, including scripts to
++control those activities.  However, it does not include the work's
++System Libraries, or general-purpose tools or generally available free
++programs which are used unmodified in performing those activities but
++which are not part of the work.  For example, Corresponding Source
++includes interface definition files associated with source files for
++the work, and the source code for shared libraries and dynamically
++linked subprograms that the work is specifically designed to require,
++such as by intimate data communication or control flow between those
++subprograms and other parts of the work.
++
++  The Corresponding Source need not include anything that users
++can regenerate automatically from other parts of the Corresponding
++Source.
++
++  The Corresponding Source for a work in source code form is that
++same work.
++
++  2. Basic Permissions.
++
++  All rights granted under this License are granted for the term of
++copyright on the Program, and are irrevocable provided the stated
++conditions are met.  This License explicitly affirms your unlimited
++permission to run the unmodified Program.  The output from running a
++covered work is covered by this License only if the output, given its
++content, constitutes a covered work.  This License acknowledges your
++rights of fair use or other equivalent, as provided by copyright law.
++
++  You may make, run and propagate covered works that you do not
++convey, without conditions so long as your license otherwise remains
++in force.  You may convey covered works to others for the sole purpose
++of having them make modifications exclusively for you, or provide you
++with facilities for running those works, provided that you comply with
++the terms of this License in conveying all material for which you do
++not control copyright.  Those thus making or running the covered works
++for you must do so exclusively on your behalf, under your direction
++and control, on terms that prohibit them from making any copies of
++your copyrighted material outside their relationship with you.
++
++  Conveying under any other circumstances is permitted solely under
++the conditions stated below.  Sublicensing is not allowed; section 10
++makes it unnecessary.
++
++  3. Protecting Users' Legal Rights From Anti-Circumvention Law.
++
++  No covered work shall be deemed part of an effective technological
++measure under any applicable law fulfilling obligations under article
++11 of the WIPO copyright treaty adopted on 20 December 1996, or
++similar laws prohibiting or restricting circumvention of such
++measures.
++
++  When you convey a covered work, you waive any legal power to forbid
++circumvention of technological measures to the extent such circumvention
++is effected by exercising rights under this License with respect to
++the covered work, and you disclaim any intention to limit operation or
++modification of the work as a means of enforcing, against the work's
++users, your or third parties' legal rights to forbid circumvention of
++technological measures.
++
++  4. Conveying Verbatim Copies.
++
++  You may convey verbatim copies of the Program's source code as you
++receive it, in any medium, provided that you conspicuously and
++appropriately publish on each copy an appropriate copyright notice;
++keep intact all notices stating that this License and any
++non-permissive terms added in accord with section 7 apply to the code;
++keep intact all notices of the absence of any warranty; and give all
++recipients a copy of this License along with the Program.
++
++  You may charge any price or no price for each copy that you convey,
++and you may offer support or warranty protection for a fee.
++
++  5. Conveying Modified Source Versions.
++
++  You may convey a work based on the Program, or the modifications to
++produce it from the Program, in the form of source code under the
++terms of section 4, provided that you also meet all of these conditions:
++
++    a) The work must carry prominent notices stating that you modified
++    it, and giving a relevant date.
++
++    b) The work must carry prominent notices stating that it is
++    released under this License and any conditions added under section
++    7.  This requirement modifies the requirement in section 4 to
++    "keep intact all notices".
++
++    c) You must license the entire work, as a whole, under this
++    License to anyone who comes into possession of a copy.  This
++    License will therefore apply, along with any applicable section 7
++    additional terms, to the whole of the work, and all its parts,
++    regardless of how they are packaged.  This License gives no
++    permission to license the work in any other way, but it does not
++    invalidate such permission if you have separately received it.
++
++    d) If the work has interactive user interfaces, each must display
++    Appropriate Legal Notices; however, if the Program has interactive
++    interfaces that do not display Appropriate Legal Notices, your
++    work need not make them do so.
++
++  A compilation of a covered work with other separate and independent
++works, which are not by their nature extensions of the covered work,
++and which are not combined with it such as to form a larger program,
++in or on a volume of a storage or distribution medium, is called an
++"aggregate" if the compilation and its resulting copyright are not
++used to limit the access or legal rights of the compilation's users
++beyond what the individual works permit.  Inclusion of a covered work
++in an aggregate does not cause this License to apply to the other
++parts of the aggregate.
++
++  6. Conveying Non-Source Forms.
++
++  You may convey a covered work in object code form under the terms
++of sections 4 and 5, provided that you also convey the
++machine-readable Corresponding Source under the terms of this License,
++in one of these ways:
++
++    a) Convey the object code in, or embodied in, a physical product
++    (including a physical distribution medium), accompanied by the
++    Corresponding Source fixed on a durable physical medium
++    customarily used for software interchange.
++
++    b) Convey the object code in, or embodied in, a physical product
++    (including a physical distribution medium), accompanied by a
++    written offer, valid for at least three years and valid for as
++    long as you offer spare parts or customer support for that product
++    model, to give anyone who possesses the object code either (1) a
++    copy of the Corresponding Source for all the software in the
++    product that is covered by this License, on a durable physical
++    medium customarily used for software interchange, for a price no
++    more than your reasonable cost of physically performing this
++    conveying of source, or (2) access to copy the
++    Corresponding Source from a network server at no charge.
++
++    c) Convey individual copies of the object code with a copy of the
++    written offer to provide the Corresponding Source.  This
++    alternative is allowed only occasionally and noncommercially, and
++    only if you received the object code with such an offer, in accord
++    with subsection 6b.
++
++    d) Convey the object code by offering access from a designated
++    place (gratis or for a charge), and offer equivalent access to the
++    Corresponding Source in the same way through the same place at no
++    further charge.  You need not require recipients to copy the
++    Corresponding Source along with the object code.  If the place to
++    copy the object code is a network server, the Corresponding Source
++    may be on a different server (operated by you or a third party)
++    that supports equivalent copying facilities, provided you maintain
++    clear directions next to the object code saying where to find the
++    Corresponding Source.  Regardless of what server hosts the
++    Corresponding Source, you remain obligated to ensure that it is
++    available for as long as needed to satisfy these requirements.
++
++    e) Convey the object code using peer-to-peer transmission, provided
++    you inform other peers where the object code and Corresponding
++    Source of the work are being offered to the general public at no
++    charge under subsection 6d.
++
++  A separable portion of the object code, whose source code is excluded
++from the Corresponding Source as a System Library, need not be
++included in conveying the object code work.
++
++  A "User Product" is either (1) a "consumer product", which means any
++tangible personal property which is normally used for personal, family,
++or household purposes, or (2) anything designed or sold for incorporation
++into a dwelling.  In determining whether a product is a consumer product,
++doubtful cases shall be resolved in favor of coverage.  For a particular
++product received by a particular user, "normally used" refers to a
++typical or common use of that class of product, regardless of the status
++of the particular user or of the way in which the particular user
++actually uses, or expects or is expected to use, the product.  A product
++is a consumer product regardless of whether the product has substantial
++commercial, industrial or non-consumer uses, unless such uses represent
++the only significant mode of use of the product.
++
++  "Installation Information" for a User Product means any methods,
++procedures, authorization keys, or other information required to install
++and execute modified versions of a covered work in that User Product from
++a modified version of its Corresponding Source.  The information must
++suffice to ensure that the continued functioning of the modified object
++code is in no case prevented or interfered with solely because
++modification has been made.
++
++  If you convey an object code work under this section in, or with, or
++specifically for use in, a User Product, and the conveying occurs as
++part of a transaction in which the right of possession and use of the
++User Product is transferred to the recipient in perpetuity or for a
++fixed term (regardless of how the transaction is characterized), the
++Corresponding Source conveyed under this section must be accompanied
++by the Installation Information.  But this requirement does not apply
++if neither you nor any third party retains the ability to install
++modified object code on the User Product (for example, the work has
++been installed in ROM).
++
++  The requirement to provide Installation Information does not include a
++requirement to continue to provide support service, warranty, or updates
++for a work that has been modified or installed by the recipient, or for
++the User Product in which it has been modified or installed.  Access to a
++network may be denied when the modification itself materially and
++adversely affects the operation of the network or violates the rules and
++protocols for communication across the network.
++
++  Corresponding Source conveyed, and Installation Information provided,
++in accord with this section must be in a format that is publicly
++documented (and with an implementation available to the public in
++source code form), and must require no special password or key for
++unpacking, reading or copying.
++
++  7. Additional Terms.
++
++  "Additional permissions" are terms that supplement the terms of this
++License by making exceptions from one or more of its conditions.
++Additional permissions that are applicable to the entire Program shall
++be treated as though they were included in this License, to the extent
++that they are valid under applicable law.  If additional permissions
++apply only to part of the Program, that part may be used separately
++under those permissions, but the entire Program remains governed by
++this License without regard to the additional permissions.
++
++  When you convey a copy of a covered work, you may at your option
++remove any additional permissions from that copy, or from any part of
++it.  (Additional permissions may be written to require their own
++removal in certain cases when you modify the work.)  You may place
++additional permissions on material, added by you to a covered work,
++for which you have or can give appropriate copyright permission.
++
++  Notwithstanding any other provision of this License, for material you
++add to a covered work, you may (if authorized by the copyright holders of
++that material) supplement the terms of this License with terms:
++
++    a) Disclaiming warranty or limiting liability differently from the
++    terms of sections 15 and 16 of this License; or
++
++    b) Requiring preservation of specified reasonable legal notices or
++    author attributions in that material or in the Appropriate Legal
++    Notices displayed by works containing it; or
++
++    c) Prohibiting misrepresentation of the origin of that material, or
++    requiring that modified versions of such material be marked in
++    reasonable ways as different from the original version; or
++
++    d) Limiting the use for publicity purposes of names of licensors or
++    authors of the material; or
++
++    e) Declining to grant rights under trademark law for use of some
++    trade names, trademarks, or service marks; or
++
++    f) Requiring indemnification of licensors and authors of that
++    material by anyone who conveys the material (or modified versions of
++    it) with contractual assumptions of liability to the recipient, for
++    any liability that these contractual assumptions directly impose on
++    those licensors and authors.
++
++  All other non-permissive additional terms are considered "further
++restrictions" within the meaning of section 10.  If the Program as you
++received it, or any part of it, contains a notice stating that it is
++governed by this License along with a term that is a further
++restriction, you may remove that term.  If a license document contains
++a further restriction but permits relicensing or conveying under this
++License, you may add to a covered work material governed by the terms
++of that license document, provided that the further restriction does
++not survive such relicensing or conveying.
++
++  If you add terms to a covered work in accord with this section, you
++must place, in the relevant source files, a statement of the
++additional terms that apply to those files, or a notice indicating
++where to find the applicable terms.
++
++  Additional terms, permissive or non-permissive, may be stated in the
++form of a separately written license, or stated as exceptions;
++the above requirements apply either way.
++
++  8. Termination.
++
++  You may not propagate or modify a covered work except as expressly
++provided under this License.  Any attempt otherwise to propagate or
++modify it is void, and will automatically terminate your rights under
++this License (including any patent licenses granted under the third
++paragraph of section 11).
++
++  However, if you cease all violation of this License, then your
++license from a particular copyright holder is reinstated (a)
++provisionally, unless and until the copyright holder explicitly and
++finally terminates your license, and (b) permanently, if the copyright
++holder fails to notify you of the violation by some reasonable means
++prior to 60 days after the cessation.
++
++  Moreover, your license from a particular copyright holder is
++reinstated permanently if the copyright holder notifies you of the
++violation by some reasonable means, this is the first time you have
++received notice of violation of this License (for any work) from that
++copyright holder, and you cure the violation prior to 30 days after
++your receipt of the notice.
++
++  Termination of your rights under this section does not terminate the
++licenses of parties who have received copies or rights from you under
++this License.  If your rights have been terminated and not permanently
++reinstated, you do not qualify to receive new licenses for the same
++material under section 10.
++
++  9. Acceptance Not Required for Having Copies.
++
++  You are not required to accept this License in order to receive or
++run a copy of the Program.  Ancillary propagation of a covered work
++occurring solely as a consequence of using peer-to-peer transmission
++to receive a copy likewise does not require acceptance.  However,
++nothing other than this License grants you permission to propagate or
++modify any covered work.  These actions infringe copyright if you do
++not accept this License.  Therefore, by modifying or propagating a
++covered work, you indicate your acceptance of this License to do so.
++
++  10. Automatic Licensing of Downstream Recipients.
++
++  Each time you convey a covered work, the recipient automatically
++receives a license from the original licensors, to run, modify and
++propagate that work, subject to this License.  You are not responsible
++for enforcing compliance by third parties with this License.
++
++  An "entity transaction" is a transaction transferring control of an
++organization, or substantially all assets of one, or subdividing an
++organization, or merging organizations.  If propagation of a covered
++work results from an entity transaction, each party to that
++transaction who receives a copy of the work also receives whatever
++licenses to the work the party's predecessor in interest had or could
++give under the previous paragraph, plus a right to possession of the
++Corresponding Source of the work from the predecessor in interest, if
++the predecessor has it or can get it with reasonable efforts.
++
++  You may not impose any further restrictions on the exercise of the
++rights granted or affirmed under this License.  For example, you may
++not impose a license fee, royalty, or other charge for exercise of
++rights granted under this License, and you may not initiate litigation
++(including a cross-claim or counterclaim in a lawsuit) alleging that
++any patent claim is infringed by making, using, selling, offering for
++sale, or importing the Program or any portion of it.
++
++  11. Patents.
++
++  A "contributor" is a copyright holder who authorizes use under this
++License of the Program or a work on which the Program is based.  The
++work thus licensed is called the contributor's "contributor version".
++
++  A contributor's "essential patent claims" are all patent claims
++owned or controlled by the contributor, whether already acquired or
++hereafter acquired, that would be infringed by some manner, permitted
++by this License, of making, using, or selling its contributor version,
++but do not include claims that would be infringed only as a
++consequence of further modification of the contributor version.  For
++purposes of this definition, "control" includes the right to grant
++patent sublicenses in a manner consistent with the requirements of
++this License.
++
++  Each contributor grants you a non-exclusive, worldwide, royalty-free
++patent license under the contributor's essential patent claims, to
++make, use, sell, offer for sale, import and otherwise run, modify and
++propagate the contents of its contributor version.
++
++  In the following three paragraphs, a "patent license" is any express
++agreement or commitment, however denominated, not to enforce a patent
++(such as an express permission to practice a patent or covenant not to
++sue for patent infringement).  To "grant" such a patent license to a
++party means to make such an agreement or commitment not to enforce a
++patent against the party.
++
++  If you convey a covered work, knowingly relying on a patent license,
++and the Corresponding Source of the work is not available for anyone
++to copy, free of charge and under the terms of this License, through a
++publicly available network server or other readily accessible means,
++then you must either (1) cause the Corresponding Source to be so
++available, or (2) arrange to deprive yourself of the benefit of the
++patent license for this particular work, or (3) arrange, in a manner
++consistent with the requirements of this License, to extend the patent
++license to downstream recipients.  "Knowingly relying" means you have
++actual knowledge that, but for the patent license, your conveying the
++covered work in a country, or your recipient's use of the covered work
++in a country, would infringe one or more identifiable patents in that
++country that you have reason to believe are valid.
++
++  If, pursuant to or in connection with a single transaction or
++arrangement, you convey, or propagate by procuring conveyance of, a
++covered work, and grant a patent license to some of the parties
++receiving the covered work authorizing them to use, propagate, modify
++or convey a specific copy of the covered work, then the patent license
++you grant is automatically extended to all recipients of the covered
++work and works based on it.
++
++  A patent license is "discriminatory" if it does not include within
++the scope of its coverage, prohibits the exercise of, or is
++conditioned on the non-exercise of one or more of the rights that are
++specifically granted under this License.  You may not convey a covered
++work if you are a party to an arrangement with a third party that is
++in the business of distributing software, under which you make payment
++to the third party based on the extent of your activity of conveying
++the work, and under which the third party grants, to any of the
++parties who would receive the covered work from you, a discriminatory
++patent license (a) in connection with copies of the covered work
++conveyed by you (or copies made from those copies), or (b) primarily
++for and in connection with specific products or compilations that
++contain the covered work, unless you entered into that arrangement,
++or that patent license was granted, prior to 28 March 2007.
++
++  Nothing in this License shall be construed as excluding or limiting
++any implied license or other defenses to infringement that may
++otherwise be available to you under applicable patent law.
++
++  12. No Surrender of Others' Freedom.
++
++  If conditions are imposed on you (whether by court order, agreement or
++otherwise) that contradict the conditions of this License, they do not
++excuse you from the conditions of this License.  If you cannot convey a
++covered work so as to satisfy simultaneously your obligations under this
++License and any other pertinent obligations, then as a consequence you may
++not convey it at all.  For example, if you agree to terms that obligate you
++to collect a royalty for further conveying from those to whom you convey
++the Program, the only way you could satisfy both those terms and this
++License would be to refrain entirely from conveying the Program.
++
++  13. Use with the GNU Affero General Public License.
++
++  Notwithstanding any other provision of this License, you have
++permission to link or combine any covered work with a work licensed
++under version 3 of the GNU Affero General Public License into a single
++combined work, and to convey the resulting work.  The terms of this
++License will continue to apply to the part which is the covered work,
++but the special requirements of the GNU Affero General Public License,
++section 13, concerning interaction through a network will apply to the
++combination as such.
++
++  14. Revised Versions of this License.
++
++  The Free Software Foundation may publish revised and/or new versions of
++the GNU General Public License from time to time.  Such new versions will
++be similar in spirit to the present version, but may differ in detail to
++address new problems or concerns.
++
++  Each version is given a distinguishing version number.  If the
++Program specifies that a certain numbered version of the GNU General
++Public License "or any later version" applies to it, you have the
++option of following the terms and conditions either of that numbered
++version or of any later version published by the Free Software
++Foundation.  If the Program does not specify a version number of the
++GNU General Public License, you may choose any version ever published
++by the Free Software Foundation.
++
++  If the Program specifies that a proxy can decide which future
++versions of the GNU General Public License can be used, that proxy's
++public statement of acceptance of a version permanently authorizes you
++to choose that version for the Program.
++
++  Later license versions may give you additional or different
++permissions.  However, no additional obligations are imposed on any
++author or copyright holder as a result of your choosing to follow a
++later version.
++
++  15. Disclaimer of Warranty.
++
++  THERE IS NO WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY
++APPLICABLE LAW.  EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT
++HOLDERS AND/OR OTHER PARTIES PROVIDE THE PROGRAM "AS IS" WITHOUT WARRANTY
++OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO,
++THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++PURPOSE.  THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE PROGRAM
++IS WITH YOU.  SHOULD THE PROGRAM PROVE DEFECTIVE, YOU ASSUME THE COST OF
++ALL NECESSARY SERVICING, REPAIR OR CORRECTION.
++
++  16. Limitation of Liability.
++
++  IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
++WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MODIFIES AND/OR CONVEYS
++THE PROGRAM AS PERMITTED ABOVE, BE LIABLE TO YOU FOR DAMAGES, INCLUDING ANY
++GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE
++USE OR INABILITY TO USE THE PROGRAM (INCLUDING BUT NOT LIMITED TO LOSS OF
++DATA OR DATA BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR THIRD
++PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH ANY OTHER PROGRAMS),
++EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF
++SUCH DAMAGES.
++
++  17. Interpretation of Sections 15 and 16.
++
++  If the disclaimer of warranty and limitation of liability provided
++above cannot be given local legal effect according to their terms,
++reviewing courts shall apply local law that most closely approximates
++an absolute waiver of all civil liability in connection with the
++Program, unless a warranty or assumption of liability accompanies a
++copy of the Program in return for a fee.
++
++                     END OF TERMS AND CONDITIONS
++
++            How to Apply These Terms to Your New Programs
++
++  If you develop a new program, and you want it to be of the greatest
++possible use to the public, the best way to achieve this is to make it
++free software which everyone can redistribute and change under these terms.
++
++  To do so, attach the following notices to the program.  It is safest
++to attach them to the start of each source file to most effectively
++state the exclusion of warranty; and each file should have at least
++the "copyright" line and a pointer to where the full notice is found.
++
++    <one line to give the program's name and a brief idea of what it does.>
++    Copyright (C) <year>  <name of author>
++
++    This program is free software: you can redistribute it and/or modify
++    it under the terms of the GNU General Public License as published by
++    the Free Software Foundation, either version 3 of the License, or
++    (at your option) any later version.
++
++    This program is distributed in the hope that it will be useful,
++    but WITHOUT ANY WARRANTY; without even the implied warranty of
++    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++    GNU General Public License for more details.
++
++    You should have received a copy of the GNU General Public License
++    along with this program.  If not, see <https://www.gnu.org/licenses/>.
++
++Also add information on how to contact you by electronic and paper mail.
++
++  If the program does terminal interaction, make it output a short
++notice like this when it starts in an interactive mode:
++
++    <program>  Copyright (C) <year>  <name of author>
++    This program comes with ABSOLUTELY NO WARRANTY; for details type `show w'.
++    This is free software, and you are welcome to redistribute it
++    under certain conditions; type `show c' for details.
++
++The hypothetical commands `show w' and `show c' should show the appropriate
++parts of the General Public License.  Of course, your program's commands
++might be different; for a GUI interface, you would use an "about box".
++
++  You should also get your employer (if you work as a programmer) or school,
++if any, to sign a "copyright disclaimer" for the program, if necessary.
++For more information on this, and how to apply and follow the GNU GPL, see
++<https://www.gnu.org/licenses/>.
++
++  The GNU General Public License does not permit incorporating your program
++into proprietary programs.  If your program is a subroutine library, you
++may consider it more useful to permit linking proprietary applications with
++the library.  If this is what you want to do, use the GNU Lesser General
++Public License instead of this License.  But first, please read
++<https://www.gnu.org/licenses/why-not-lgpl.html>.
+diff --git a/Kconfig b/Kconfig
+index 37afe2ac8..5d8884413 100644
+--- a/Kconfig
++++ b/Kconfig
+@@ -20,4 +20,9 @@ config RH_KABI_SIZE_ALIGN_CHECKS
+ 	  This option enables more stringent kabi checks. Those must be disable
+ 	  in case of a debug-build because they allow to change struct sizes.
+ 
+-
++config SPEEDUP_RATIO 
++	int "Speedup Ratio"
++        range 1 1000
++        default 1 
++  	help
++	  The Speedup Multiplier for Dynamic Acceleration 
+diff --git a/Makefile b/Makefile
+index 53e27dba8..b8c562c03 100644
+--- a/Makefile
++++ b/Makefile
+@@ -2,7 +2,7 @@
+ VERSION = 4
+ PATCHLEVEL = 18
+ SUBLEVEL = 0
+-EXTRAVERSION =
++EXTRAVERSION = -394.el8-dynaccel
+ NAME = Merciless Moray
+ 
+ #
+diff --git a/README b/README
+deleted file mode 100644
+index 2c927ccbd..000000000
+--- a/README
++++ /dev/null
+@@ -1,19 +0,0 @@
+-Linux kernel
+-============
+-
+-There are several guides for kernel developers and users. These guides can
+-be rendered in a number of formats, like HTML and PDF. Please read
+-Documentation/admin-guide/README.rst first.
+-
+-In order to build the documentation, use ``make htmldocs`` or
+-``make pdfdocs``.  The formatted documentation can also be read online at:
+-
+-    https://www.kernel.org/doc/html/latest/
+-
+-There are various text files in the Documentation/ subdirectory,
+-several of them using the Restructured Text markup notation.
+-See Documentation/00-INDEX for a list of what is contained in each file.
+-
+-Please read the Documentation/process/changes.rst file, as it contains the
+-requirements for building and running the kernel, and information about
+-the problems which may result by upgrading your kernel.
+diff --git a/README.md b/README.md
+new file mode 100644
+index 000000000..849670369
+--- /dev/null
++++ b/README.md
+@@ -0,0 +1,9 @@
++### Dynamic Accelereted Linux kernel based on CentOS8s
++#### Version: 4.18.0-394.el8.x86_64
++---
++The idea originated from [this repository](https://github.com/ystk/dynamic-acceleration) </br>
++A presenation by the original authors (Toshiba) discribing this work is at [this PDF](https://elinux.org/images/6/6d/Linux_Kernel_Acceleration_for_Long-term_Testing.pdf)
++
++- **The kernel should be compiled under gcc-8 and g++-8** otherwise the compilation will fail. <br>
++- The speedup_ratio (acceleration) can be changed using ```sysctl```. Example: ```sysctl --write kernel.accel=50```. 
++The value can be displayed using ```cat /proc/sys/kernel/accel```
+diff --git a/drivers/ata/libata-core.c b/drivers/ata/libata-core.c
+index 039acf7e3..c12a7c287 100644
+--- a/drivers/ata/libata-core.c
++++ b/drivers/ata/libata-core.c
+@@ -60,6 +60,7 @@
+ #include <linux/log2.h>
+ #include <linux/slab.h>
+ #include <linux/glob.h>
++#include <linux/dynaccel.h>
+ #include <scsi/scsi.h>
+ #include <scsi/scsi_cmnd.h>
+ #include <scsi/scsi_host.h>
+@@ -1573,7 +1574,7 @@ unsigned ata_exec_internal_sg(struct ata_device *dev,
+ 
+ 	if (!timeout) {
+ 		if (ata_probe_timeout)
+-			timeout = ata_probe_timeout * 1000;
++			timeout = ata_probe_timeout * 1000 * speedup_ratio;
+ 		else {
+ 			timeout = ata_internal_cmd_timeout(dev, command);
+ 			auto_timeout = 1;
+@@ -3587,9 +3588,9 @@ int ata_wait_ready(struct ata_link *link, unsigned long deadline,
+ 
+ 	/* choose which 0xff timeout to use, read comment in libata.h */
+ 	if (link->ap->host->flags & ATA_HOST_PARALLEL_SCAN)
+-		nodev_deadline = ata_deadline(start, ATA_TMOUT_FF_WAIT_LONG);
++		nodev_deadline = ata_deadline(start, ATA_TMOUT_FF_WAIT_LONG * speedup_ratio);
+ 	else
+-		nodev_deadline = ata_deadline(start, ATA_TMOUT_FF_WAIT);
++		nodev_deadline = ata_deadline(start, ATA_TMOUT_FF_WAIT * speedup_ratio);
+ 
+ 	/* Slave readiness can't be tested separately from master.  On
+ 	 * M/S emulation configuration, this function should be called
+@@ -3633,15 +3634,15 @@ int ata_wait_ready(struct ata_link *link, unsigned long deadline,
+ 		if (time_after(now, deadline))
+ 			return -EBUSY;
+ 
+-		if (!warned && time_after(now, start + 5 * HZ) &&
+-		    (deadline - now > 3 * HZ)) {
++		if (!warned && time_after(now, start + 5 * HZ * speedup_ratio) &&
++		    (deadline - now > 3 * HZ * speedup_ratio)) {
+ 			ata_link_warn(link,
+ 				"link is slow to respond, please be patient "
+ 				"(ready=%d)\n", tmp);
+ 			warned = 1;
+ 		}
+ 
+-		ata_msleep(link->ap, 50);
++		ata_msleep(link->ap, 50 * speedup_ratio);
+ 	}
+ }
+ 
+@@ -3662,7 +3663,7 @@ int ata_wait_ready(struct ata_link *link, unsigned long deadline,
+ int ata_wait_after_reset(struct ata_link *link, unsigned long deadline,
+ 				int (*check_ready)(struct ata_link *link))
+ {
+-	ata_msleep(link->ap, ATA_WAIT_AFTER_RESET);
++	ata_msleep(link->ap, ATA_WAIT_AFTER_RESET * speedup_ratio);
+ 
+ 	return ata_wait_ready(link, deadline, check_ready);
+ }
+@@ -4443,7 +4444,7 @@ unsigned int ata_dev_set_feature(struct ata_device *dev, u8 enable, u8 feature)
+ 
+ 	if (enable == SETFEATURES_SPINUP)
+ 		timeout = ata_probe_timeout ?
+-			  ata_probe_timeout * 1000 : SETFEATURES_SPINUP_TIMEOUT;
++			  ata_probe_timeout * 1000 * speedup_ratio: SETFEATURES_SPINUP_TIMEOUT * speedup_ratio;
+ 	err_mask = ata_exec_internal(dev, &tf, NULL, DMA_NONE, NULL, 0, timeout);
+ 
+ 	DPRINTK("EXIT, err_mask=%x\n", err_mask);
+@@ -6566,7 +6567,7 @@ u32 ata_wait_register(struct ata_port *ap, void __iomem *reg, u32 mask, u32 val,
+ 	deadline = ata_deadline(jiffies, timeout);
+ 
+ 	while ((tmp & mask) == val && time_before(jiffies, deadline)) {
+-		ata_msleep(ap, interval);
++		ata_msleep(ap, interval * speedup_ratio);
+ 		tmp = ioread32(reg);
+ 	}
+ 
+diff --git a/drivers/ata/libata-eh.c b/drivers/ata/libata-eh.c
+index 13c324974..42cc86d52 100644
+--- a/drivers/ata/libata-eh.c
++++ b/drivers/ata/libata-eh.c
+@@ -32,6 +32,7 @@
+ #include <linux/blkdev.h>
+ #include <linux/export.h>
+ #include <linux/pci.h>
++#include <linux/dynaccel.h>
+ #include <scsi/scsi.h>
+ #include <scsi/scsi_host.h>
+ #include <scsi/scsi_eh.h>
+@@ -808,7 +809,7 @@ void ata_port_wait_eh(struct ata_port *ap)
+ 
+ 	/* make sure SCSI EH is complete */
+ 	if (scsi_host_in_recovery(ap->scsi_host)) {
+-		ata_msleep(ap, 10);
++		ata_msleep(ap, 10 * speedup_ratio);
+ 		goto retry;
+ 	}
+ }
+@@ -860,7 +861,7 @@ void ata_eh_fastdrain_timerfn(struct timer_list *t)
+ 		/* some qcs have finished, give it another chance */
+ 		ap->fastdrain_cnt = cnt;
+ 		ap->fastdrain_timer.expires =
+-			ata_deadline(jiffies, ATA_EH_FASTDRAIN_INTERVAL);
++			ata_deadline(jiffies, ATA_EH_FASTDRAIN_INTERVAL * speedup_ratio);
+ 		add_timer(&ap->fastdrain_timer);
+ 	}
+ 
+@@ -901,7 +902,7 @@ static void ata_eh_set_pending(struct ata_port *ap, int fastdrain)
+ 	/* activate fast drain */
+ 	ap->fastdrain_cnt = cnt;
+ 	ap->fastdrain_timer.expires =
+-		ata_deadline(jiffies, ATA_EH_FASTDRAIN_INTERVAL);
++		ata_deadline(jiffies, ATA_EH_FASTDRAIN_INTERVAL * speedup_ratio);
+ 	add_timer(&ap->fastdrain_timer);
+ }
+ 
+@@ -1747,7 +1748,7 @@ static int speed_down_verdict_cb(struct ata_ering_entry *ent, void *void_arg)
+  */
+ static unsigned int ata_eh_speed_down_verdict(struct ata_device *dev)
+ {
+-	const u64 j5mins = 5LLU * 60 * HZ, j10mins = 10LLU * 60 * HZ;
++	const u64 j5mins = 5LLU * 60 * HZ * speedup_ratio, j10mins = 10LLU * 60 * HZ;
+ 	u64 j64 = get_jiffies_64();
+ 	struct speed_down_verdict_arg arg;
+ 	unsigned int verdict = 0;
+@@ -2493,7 +2494,7 @@ int ata_eh_reset(struct ata_link *link, int classify,
+ 		now = jiffies;
+ 		WARN_ON(time_after(ehc->last_reset, now));
+ 		deadline = ata_deadline(ehc->last_reset,
+-					ATA_EH_RESET_COOL_DOWN);
++					ATA_EH_RESET_COOL_DOWN * speedup_ratio);
+ 		if (time_before(now, deadline))
+ 			schedule_timeout_uninterruptible(deadline - now);
+ 	}
+@@ -2537,7 +2538,7 @@ int ata_eh_reset(struct ata_link *link, int classify,
+ 
+ 	if (prereset) {
+ 		unsigned long deadline = ata_deadline(jiffies,
+-						      ATA_EH_PRERESET_TIMEOUT);
++						      ATA_EH_PRERESET_TIMEOUT * speedup_ratio);
+ 
+ 		if (slave) {
+ 			sehc->i.action &= ~ATA_EH_RESET;
+@@ -2597,7 +2598,7 @@ int ata_eh_reset(struct ata_link *link, int classify,
+ 	if (ata_is_host_link(link))
+ 		ata_eh_freeze_port(ap);
+ 
+-	deadline = ata_deadline(jiffies, ata_eh_reset_timeouts[try++]);
++	deadline = ata_deadline(jiffies, ata_eh_reset_timeouts[try++] * speedup_ratio);
+ 
+ 	if (reset) {
+ 		if (verbose)
+diff --git a/drivers/ata/libata-sata.c b/drivers/ata/libata-sata.c
+index c16423e44..fc3dc62ab 100644
+--- a/drivers/ata/libata-sata.c
++++ b/drivers/ata/libata-sata.c
+@@ -9,6 +9,7 @@
+ 
+ #include <linux/kernel.h>
+ #include <linux/module.h>
++#include <linux/dynaccel.h>
+ #include <scsi/scsi_cmnd.h>
+ #include <scsi/scsi_device.h>
+ #include <linux/libata.h>
+@@ -251,7 +252,7 @@ int sata_link_debounce(struct ata_link *link, const unsigned long *params,
+ 	last_jiffies = jiffies;
+ 
+ 	while (1) {
+-		ata_msleep(link->ap, interval);
++		ata_msleep(link->ap, interval * speedup_ratio);
+ 		if ((rc = sata_scr_read(link, SCR_STATUS, &cur)))
+ 			return rc;
+ 		cur &= 0xf;
+@@ -261,7 +262,7 @@ int sata_link_debounce(struct ata_link *link, const unsigned long *params,
+ 			if (cur == 1 && time_before(jiffies, deadline))
+ 				continue;
+ 			if (time_after(jiffies,
+-				       ata_deadline(last_jiffies, duration)))
++				       ata_deadline(last_jiffies, duration * speedup_ratio)))
+ 				return 0;
+ 			continue;
+ 		}
+@@ -318,7 +319,7 @@ int sata_link_resume(struct ata_link *link, const unsigned long *params,
+ 		 * debouncing.
+ 		 */
+ 		if (!(link->flags & ATA_LFLAG_NO_DB_DELAY))
+-			ata_msleep(link->ap, 200);
++			ata_msleep(link->ap, 200 * speedup_ratio);
+ 
+ 		/* is SControl restored correctly? */
+ 		if ((rc = sata_scr_read(link, SCR_CONTROL, &scontrol)))
+@@ -567,7 +568,7 @@ int sata_link_hardreset(struct ata_link *link, const unsigned long *timing,
+ 	/* Couldn't find anything in SATA I/II specs, but AHCI-1.1
+ 	 * 10.4.2 says at least 1 ms.
+ 	 */
+-	ata_msleep(link->ap, 1);
++	ata_msleep(link->ap, 1 * speedup_ratio);
+ 
+ 	/* bring link back */
+ 	rc = sata_link_resume(link, timing, deadline);
+@@ -591,7 +592,7 @@ int sata_link_hardreset(struct ata_link *link, const unsigned long *timing,
+ 			unsigned long pmp_deadline;
+ 
+ 			pmp_deadline = ata_deadline(jiffies,
+-						    ATA_TMOUT_PMP_SRST_WAIT);
++						    ATA_TMOUT_PMP_SRST_WAIT * speedup_ratio);
+ 			if (time_after(pmp_deadline, deadline))
+ 				pmp_deadline = deadline;
+ 			ata_wait_ready(link, pmp_deadline, check_ready);
+diff --git a/drivers/ata/libata-scsi.c b/drivers/ata/libata-scsi.c
+index ae9821c44..9585ce012 100644
+--- a/drivers/ata/libata-scsi.c
++++ b/drivers/ata/libata-scsi.c
+@@ -34,6 +34,7 @@
+ #include <linux/blkdev.h>
+ #include <linux/spinlock.h>
+ #include <linux/export.h>
++#include <linux/dynaccel.h>
+ #include <scsi/scsi.h>
+ #include <scsi/scsi_host.h>
+ #include <scsi/scsi_cmnd.h>
+@@ -422,7 +423,7 @@ int ata_cmd_ioctl(struct scsi_device *scsidev, void __user *arg)
+ 	/* Good values for timeout and retries?  Values below
+ 	   from scsi_ioctl_send_command() for default case... */
+ 	cmd_result = scsi_execute(scsidev, scsi_cmd, data_dir, argbuf, argsize,
+-				  sensebuf, &sshdr, (10*HZ), 5, 0, 0, NULL);
++				  sensebuf, &sshdr, (10*HZ)*speedup_ratio, 5, 0, 0, NULL);
+ 
+ 	if (driver_byte(cmd_result) == DRIVER_SENSE) {/* sense data available */
+ 		u8 *desc = sensebuf + 8;
+@@ -503,7 +504,7 @@ int ata_task_ioctl(struct scsi_device *scsidev, void __user *arg)
+ 	/* Good values for timeout and retries?  Values below
+ 	   from scsi_ioctl_send_command() for default case... */
+ 	cmd_result = scsi_execute(scsidev, scsi_cmd, DMA_NONE, NULL, 0,
+-				sensebuf, &sshdr, (10*HZ), 5, 0, 0, NULL);
++				sensebuf, &sshdr, (10*HZ)*speedup_ratio, 5, 0, 0, NULL);
+ 
+ 	if (driver_byte(cmd_result) == DRIVER_SENSE) {/* sense data available */
+ 		u8 *desc = sensebuf + 8;
+@@ -4379,7 +4380,7 @@ void ata_scsi_scan_host(struct ata_port *ap, int sync)
+ 		 * any progress, sleep briefly and repeat.
+ 		 */
+ 		if (dev != last_failed_dev) {
+-			msleep(100);
++			msleep(100 * speedup_ratio);
+ 			last_failed_dev = dev;
+ 			goto repeat;
+ 		}
+@@ -4388,7 +4389,7 @@ void ata_scsi_scan_host(struct ata_port *ap, int sync)
+ 		 * a few more chances.
+ 		 */
+ 		if (--tries) {
+-			msleep(100);
++			msleep(100 * speedup_ratio);
+ 			goto repeat;
+ 		}
+ 
+@@ -4397,7 +4398,7 @@ void ata_scsi_scan_host(struct ata_port *ap, int sync)
+ 	}
+ 
+ 	queue_delayed_work(system_long_wq, &ap->hotplug_task,
+-			   round_jiffies_relative(HZ));
++			   round_jiffies_relative(HZ) * speedup_ratio);
+ }
+ 
+ /**
+diff --git a/drivers/ata/libata-sff.c b/drivers/ata/libata-sff.c
+index ee8cbafd3..8e9b83b4d 100644
+--- a/drivers/ata/libata-sff.c
++++ b/drivers/ata/libata-sff.c
+@@ -34,6 +34,7 @@
+ #include <linux/module.h>
+ #include <linux/libata.h>
+ #include <linux/highmem.h>
++#include <linux/dynaccel.h>
+ 
+ #include "libata.h"
+ 
+@@ -219,7 +220,7 @@ int ata_sff_busy_sleep(struct ata_port *ap,
+ 	timeout = ata_deadline(timer_start, tmout_pat);
+ 	while (status != 0xff && (status & ATA_BUSY) &&
+ 	       time_before(jiffies, timeout)) {
+-		ata_msleep(ap, 50);
++		ata_msleep(ap, 50 * speedup_ratio);
+ 		status = ata_sff_busy_wait(ap, ATA_BUSY, 3);
+ 	}
+ 
+@@ -231,7 +232,7 @@ int ata_sff_busy_sleep(struct ata_port *ap,
+ 	timeout = ata_deadline(timer_start, tmout);
+ 	while (status != 0xff && (status & ATA_BUSY) &&
+ 	       time_before(jiffies, timeout)) {
+-		ata_msleep(ap, 50);
++		ata_msleep(ap, 50 * speedup_ratio);
+ 		status = ap->ops->sff_check_status(ap);
+ 	}
+ 
+@@ -357,7 +358,7 @@ static void ata_dev_select(struct ata_port *ap, unsigned int device,
+ 
+ 	if (wait) {
+ 		if (can_sleep && ap->link.device[device].class == ATA_DEV_ATAPI)
+-			ata_msleep(ap, 150);
++			ata_msleep(ap, 150 * speedup_ratio);
+ 		ata_wait_idle(ap);
+ 	}
+ }
+@@ -1313,7 +1314,7 @@ fsm_start:
+ 	status = ata_sff_busy_wait(ap, ATA_BUSY, 5);
+ 	if (status & ATA_BUSY) {
+ 		spin_unlock_irq(ap->lock);
+-		ata_msleep(ap, 2);
++		ata_msleep(ap, 2 * speedup_ratio);
+ 		spin_lock_irq(ap->lock);
+ 
+ 		status = ata_sff_busy_wait(ap, ATA_BUSY, 10);
+@@ -1897,7 +1898,7 @@ int ata_sff_wait_after_reset(struct ata_link *link, unsigned int devmask,
+ 	unsigned int dev1 = devmask & (1 << 1);
+ 	int rc, ret = 0;
+ 
+-	ata_msleep(ap, ATA_WAIT_AFTER_RESET);
++	ata_msleep(ap, ATA_WAIT_AFTER_RESET * speedup_ratio * speedup_ratio);
+ 
+ 	/* always check readiness of the master device */
+ 	rc = ata_sff_wait_ready(link, deadline);
+@@ -1926,7 +1927,7 @@ int ata_sff_wait_after_reset(struct ata_link *link, unsigned int devmask,
+ 			lbal = ioread8(ioaddr->lbal_addr);
+ 			if ((nsect == 1) && (lbal == 1))
+ 				break;
+-			ata_msleep(ap, 50);	/* give drive a breather */
++			ata_msleep(ap, 50 * speedup_ratio);	/* give drive a breather */
+ 		}
+ 
+ 		rc = ata_sff_wait_ready(link, deadline);
+@@ -2005,7 +2006,7 @@ int ata_sff_softreset(struct ata_link *link, unsigned int *classes,
+ 
+ 	/* issue bus reset */
+ 	DPRINTK("about to softreset, devmask=%x\n", devmask);
+-	rc = ata_bus_softreset(ap, devmask, deadline);
++	rc = ata_bus_softreset(ap, devmask, deadline * speedup_ratio);
+ 	/* if link is occupied, -ENODEV too is an error */
+ 	if (rc && (rc != -ENODEV || sata_scr_valid(link))) {
+ 		ata_link_err(link, "SRST failed (errno=%d)\n", rc);
+diff --git a/drivers/char/hw_random/core.c b/drivers/char/hw_random/core.c
+index 0ef7cb044..8dbe94f4c 100644
+--- a/drivers/char/hw_random/core.c
++++ b/drivers/char/hw_random/core.c
+@@ -24,6 +24,7 @@
+ #include <linux/sched.h>
+ #include <linux/slab.h>
+ #include <linux/uaccess.h>
++#include <linux/dynaccel.h>
+ 
+ #define RNG_MODULE_NAME		"hw_random"
+ 
+@@ -258,7 +259,7 @@ static ssize_t rng_dev_read(struct file *filp, char __user *buf,
+ 		put_rng(rng);
+ 
+ 		if (need_resched())
+-			schedule_timeout_interruptible(1);
++			schedule_timeout_interruptible(1 * speedup_ratio);
+ 
+ 		if (signal_pending(current)) {
+ 			err = -ERESTARTSYS;
+diff --git a/drivers/cpuidle/governors/ladder.c b/drivers/cpuidle/governors/ladder.c
+index 4322c2b8b..fac1b083a 100644
+--- a/drivers/cpuidle/governors/ladder.c
++++ b/drivers/cpuidle/governors/ladder.c
+@@ -81,7 +81,7 @@ static int ladder_select_state(struct cpuidle_driver *drv,
+ 
+ 	last_state = &ldev->states[last_idx];
+ 
+-	last_residency = dev->last_residency_ns - drv->states[last_idx].exit_latency_ns;
++	last_residency = dev->rh_cpuidle_dev.last_residency_ns  - drv->states[last_idx].exit_latency_ns;
+ 
+ 	/* consider promotion */
+ 	if (last_idx < drv->state_count - 1 &&
+diff --git a/drivers/input/input.c b/drivers/input/input.c
+index 33e6ac2f5..346234eb5 100644
+--- a/drivers/input/input.c
++++ b/drivers/input/input.c
+@@ -24,6 +24,7 @@
+ #include <linux/mutex.h>
+ #include <linux/rcupdate.h>
+ #include "input-compat.h"
++#include <linux/dynaccel.h>
+ 
+ MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
+ MODULE_DESCRIPTION("Input core");
+@@ -75,7 +76,7 @@ static void input_start_autorepeat(struct input_dev *dev, int code)
+ 	    dev->timer.function) {
+ 		dev->repeat_key = code;
+ 		mod_timer(&dev->timer,
+-			  jiffies + msecs_to_jiffies(dev->rep[REP_DELAY]));
++			  jiffies + msecs_to_jiffies(dev->rep[REP_DELAY]) * speedup_ratio);
+ 	}
+ }
+ 
+@@ -193,7 +194,7 @@ static void input_repeat_key(struct timer_list *t)
+ 
+ 		if (dev->rep[REP_PERIOD])
+ 			mod_timer(&dev->timer, jiffies +
+-					msecs_to_jiffies(dev->rep[REP_PERIOD]));
++					msecs_to_jiffies(dev->rep[REP_PERIOD]) * speedup_ratio);
+ 	}
+ 
+ 	spin_unlock_irqrestore(&dev->event_lock, flags);
+diff --git a/drivers/input/keyboard/atkbd.c b/drivers/input/keyboard/atkbd.c
+index 7e3eae54c..b54ca9fb8 100644
+--- a/drivers/input/keyboard/atkbd.c
++++ b/drivers/input/keyboard/atkbd.c
+@@ -24,6 +24,7 @@
+ #include <linux/libps2.h>
+ #include <linux/mutex.h>
+ #include <linux/dmi.h>
++#include <linux/dynaccel.h>
+ 
+ #define DRIVER_DESC	"AT and PS/2 keyboard driver"
+ 
+@@ -503,7 +504,7 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
+ 		} else {
+ 			value = 1;
+ 			atkbd->last = code;
+-			atkbd->time = jiffies + msecs_to_jiffies(dev->rep[REP_DELAY]) / 2;
++			atkbd->time = jiffies + msecs_to_jiffies(dev->rep[REP_DELAY]) * speedup_ratio / 2;
+ 		}
+ 
+ 		input_event(dev, EV_KEY, keycode, value);
+@@ -544,11 +545,11 @@ static int atkbd_set_repeat_rate(struct atkbd *atkbd)
+ 
+ 	while (i < ARRAY_SIZE(period) - 1 && period[i] < dev->rep[REP_PERIOD])
+ 		i++;
+-	dev->rep[REP_PERIOD] = period[i];
++	dev->rep[REP_PERIOD] = period[i] * speedup_ratio;
+ 
+ 	while (j < ARRAY_SIZE(delay) - 1 && delay[j] < dev->rep[REP_DELAY])
+ 		j++;
+-	dev->rep[REP_DELAY] = delay[j];
++	dev->rep[REP_DELAY] = delay[j] * speedup_ratio;
+ 
+ 	param = i | (j << 5);
+ 	return ps2_command(&atkbd->ps2dev, &param, ATKBD_CMD_SETREP);
+@@ -599,7 +600,7 @@ static void atkbd_event_work(struct work_struct *work)
+ 		 * rescheduling till reconnect completes.
+ 		 */
+ 		schedule_delayed_work(&atkbd->event_work,
+-					msecs_to_jiffies(100));
++					msecs_to_jiffies(100 * speedup_ratio));
+ 	} else {
+ 		if (test_and_clear_bit(ATKBD_LED_EVENT_BIT, &atkbd->event_mask))
+ 			atkbd_set_leds(atkbd);
+@@ -617,7 +618,7 @@ static void atkbd_event_work(struct work_struct *work)
+  */
+ static void atkbd_schedule_event_work(struct atkbd *atkbd, int event_bit)
+ {
+-	unsigned long delay = msecs_to_jiffies(50);
++	unsigned long delay = msecs_to_jiffies(50 * speedup_ratio);
+ 
+ 	if (time_after(jiffies, atkbd->event_jiffies + delay))
+ 		delay = 0;
+diff --git a/drivers/input/serio/libps2.c b/drivers/input/serio/libps2.c
+index e93e17c4f..22ecd648e 100644
+--- a/drivers/input/serio/libps2.c
++++ b/drivers/input/serio/libps2.c
+@@ -15,6 +15,7 @@
+ #include <linux/serio.h>
+ #include <linux/i8042.h>
+ #include <linux/libps2.h>
++#include <linux/dynaccel.h>
+ 
+ #define DRIVER_DESC	"PS/2 driver library"
+ 
+@@ -44,7 +45,7 @@ static int ps2_do_sendbyte(struct ps2dev *ps2dev, u8 byte,
+ 		else
+ 			wait_event_timeout(ps2dev->wait,
+ 					   !(ps2dev->flags & PS2_FLAG_ACK),
+-					   msecs_to_jiffies(timeout));
++					   msecs_to_jiffies(timeout * speedup_ratio));
+ 
+ 		serio_pause_rx(ps2dev->serio);
+ 	} while (ps2dev->nak == PS2_RET_NAK && ++attempt < max_attempts);
+@@ -135,7 +136,7 @@ void ps2_drain(struct ps2dev *ps2dev, size_t maxbytes, unsigned int timeout)
+ 
+ 	wait_event_timeout(ps2dev->wait,
+ 			   !(ps2dev->flags & PS2_FLAG_CMD),
+-			   msecs_to_jiffies(timeout));
++			   msecs_to_jiffies(timeout * speedup_ratio));
+ 
+ 	ps2_end_command(ps2dev);
+ }
+@@ -179,8 +180,8 @@ static int ps2_adjust_timeout(struct ps2dev *ps2dev,
+ 		 * The next byte will come soon (keyboard) or not
+ 		 * at all (mouse).
+ 		 */
+-		if (timeout > msecs_to_jiffies(100))
+-			timeout = msecs_to_jiffies(100);
++		if (timeout > msecs_to_jiffies(100) * speedup_ratio)
++			timeout = msecs_to_jiffies(100) * speedup_ratio;
+ 		break;
+ 
+ 	case PS2_CMD_GETID:
+@@ -280,16 +281,16 @@ int __ps2_command(struct ps2dev *ps2dev, u8 *param, unsigned int command)
+ 	/*
+ 	 * The reset command takes a long time to execute.
+ 	 */
+-	timeout = msecs_to_jiffies(command == PS2_CMD_RESET_BAT ? 4000 : 500);
++	timeout = msecs_to_jiffies(command == PS2_CMD_RESET_BAT ? 4000 : 500) * speedup_ratio;
+ 
+ 	timeout = wait_event_timeout(ps2dev->wait,
+-				     !(ps2dev->flags & PS2_FLAG_CMD1), timeout);
++				     !(ps2dev->flags & PS2_FLAG_CMD1), timeout * speedup_ratio);
+ 
+ 	if (ps2dev->cmdcnt && !(ps2dev->flags & PS2_FLAG_CMD1)) {
+ 
+-		timeout = ps2_adjust_timeout(ps2dev, command, timeout);
++		timeout = ps2_adjust_timeout(ps2dev, command, timeout * speedup_ratio);
+ 		wait_event_timeout(ps2dev->wait,
+-				   !(ps2dev->flags & PS2_FLAG_CMD), timeout);
++				   !(ps2dev->flags & PS2_FLAG_CMD), timeout * speedup_ratio);
+ 	}
+ 
+ 	serio_pause_rx(ps2dev->serio);
+diff --git a/drivers/mmc/core/block.c b/drivers/mmc/core/block.c
+index 28ba590d5..2d80cec67 100644
+--- a/drivers/mmc/core/block.c
++++ b/drivers/mmc/core/block.c
+@@ -38,6 +38,7 @@
+ #include <linux/pm_runtime.h>
+ #include <linux/idr.h>
+ #include <linux/debugfs.h>
++#include <linux/dynaccel.h>
+ 
+ #include <linux/mmc/ioctl.h>
+ #include <linux/mmc/card.h>
+diff --git a/drivers/mmc/core/core.c b/drivers/mmc/core/core.c
+index e8a14a936..00af6228b 100644
+--- a/drivers/mmc/core/core.c
++++ b/drivers/mmc/core/core.c
+@@ -29,6 +29,7 @@
+ #include <linux/random.h>
+ #include <linux/slab.h>
+ #include <linux/of.h>
++#include <linux/dynaccel.h>
+ 
+ #include <linux/mmc/card.h>
+ #include <linux/mmc/host.h>
+@@ -673,7 +674,7 @@ void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
+ 	 * SDIO cards only define an upper 1 s limit on access.
+ 	 */
+ 	if (mmc_card_sdio(card)) {
+-		data->timeout_ns = 1000000000;
++		data->timeout_ns = 1000000000 * speedup_ratio;
+ 		data->timeout_clks = 0;
+ 		return;
+ 	}
+@@ -690,8 +691,8 @@ void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
+ 	if (data->flags & MMC_DATA_WRITE)
+ 		mult <<= card->csd.r2w_factor;
+ 
+-	data->timeout_ns = card->csd.taac_ns * mult;
+-	data->timeout_clks = card->csd.taac_clks * mult;
++	data->timeout_ns = card->csd.taac_ns * mult * speedup_ratio;
++	data->timeout_clks = card->csd.taac_clks * mult * speedup_ratio;
+ 
+ 	/*
+ 	 * SD cards also have an upper limit on the timeout.
+@@ -721,13 +722,13 @@ void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
+ 		 * SDHC cards always use these fixed values.
+ 		 */
+ 		if (timeout_us > limit_us) {
+-			data->timeout_ns = limit_us * 1000;
++			data->timeout_ns = limit_us * 1000 * speedup_ratio;
+ 			data->timeout_clks = 0;
+ 		}
+ 
+ 		/* assign limit value if invalid */
+ 		if (timeout_us == 0)
+-			data->timeout_ns = limit_us * 1000;
++			data->timeout_ns = limit_us * 1000 * speedup_ratio;
+ 	}
+ 
+ 	/*
+@@ -737,7 +738,7 @@ void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
+ 	 * this value can be increased if other problematic cards require this.
+ 	 */
+ 	if (mmc_card_long_read_time(card) && data->flags & MMC_DATA_READ) {
+-		data->timeout_ns = 600000000;
++		data->timeout_ns = 600000000 * speedup_ratio;
+ 		data->timeout_clks = 0;
+ 	}
+ 
+@@ -749,11 +750,11 @@ void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
+ 	 */
+ 	if (mmc_host_is_spi(card->host)) {
+ 		if (data->flags & MMC_DATA_WRITE) {
+-			if (data->timeout_ns < 1000000000)
+-				data->timeout_ns = 1000000000;	/* 1s */
++			if (data->timeout_ns < 1000000000 * speedup_ratio)
++				data->timeout_ns = 1000000000 * speedup_ratio;	/* 1s */
+ 		} else {
+-			if (data->timeout_ns < 100000000)
+-				data->timeout_ns =  100000000;	/* 100ms */
++			if (data->timeout_ns < 100000000 * speedup_ratio)
++				data->timeout_ns =  100000000 * speedup_ratio;	/* 100ms */
+ 		}
+ 	}
+ }
+@@ -1674,7 +1675,7 @@ void mmc_power_up(struct mmc_host *host, u32 ocr)
+ 	 * This delay must be at least 74 clock sizes, or 1 ms, or the
+ 	 * time required to reach a stable voltage.
+ 	 */
+-	mmc_delay(host->ios.power_delay_ms);
++	mmc_delay(host->ios.power_delay_ms * speedup_ratio);
+ }
+ 
+ void mmc_power_off(struct mmc_host *host)
+@@ -2667,7 +2668,7 @@ void mmc_rescan(struct work_struct *work)
+ 
+  out:
+ 	if (host->caps & MMC_CAP_NEEDS_POLL)
+-		mmc_schedule_delayed_work(&host->detect, HZ);
++		mmc_schedule_delayed_work(&host->detect, HZ * speedup_ratio);
+ }
+ 
+ void mmc_start_host(struct mmc_host *host)
+diff --git a/drivers/mmc/core/mmc_ops.c b/drivers/mmc/core/mmc_ops.c
+index 42d6aa89a..22e801f03 100644
+--- a/drivers/mmc/core/mmc_ops.c
++++ b/drivers/mmc/core/mmc_ops.c
+@@ -17,6 +17,7 @@
+ #include <linux/mmc/host.h>
+ #include <linux/mmc/card.h>
+ #include <linux/mmc/mmc.h>
++#include <linux/dynaccel.h>
+ 
+ #include "core.h"
+ #include "card.h"
+@@ -149,7 +150,7 @@ int mmc_go_idle(struct mmc_host *host)
+ 	 */
+ 	if (!mmc_host_is_spi(host)) {
+ 		mmc_set_chip_select(host, MMC_CS_HIGH);
+-		mmc_delay(1);
++		mmc_delay(1 * speedup_ratio);
+ 	}
+ 
+ 	cmd.opcode = MMC_GO_IDLE_STATE;
+@@ -158,11 +159,11 @@ int mmc_go_idle(struct mmc_host *host)
+ 
+ 	err = mmc_wait_for_cmd(host, &cmd, 0);
+ 
+-	mmc_delay(1);
++	mmc_delay(1 * speedup_ratio);
+ 
+ 	if (!mmc_host_is_spi(host)) {
+ 		mmc_set_chip_select(host, MMC_CS_DONTCARE);
+-		mmc_delay(1);
++		mmc_delay(1 * speedup_ratio);
+ 	}
+ 
+ 	host->use_spi_crc = 0;
+@@ -199,7 +200,7 @@ int mmc_send_op_cond(struct mmc_host *host, u32 ocr, u32 *rocr)
+ 
+ 		err = -ETIMEDOUT;
+ 
+-		mmc_delay(10);
++		mmc_delay(10 * speedup_ratio);
+ 	}
+ 
+ 	if (rocr && !mmc_host_is_spi(host))
+diff --git a/drivers/mmc/core/sd_ops.c b/drivers/mmc/core/sd_ops.c
+index 47056d8d1..b903a5fb4 100644
+--- a/drivers/mmc/core/sd_ops.c
++++ b/drivers/mmc/core/sd_ops.c
+@@ -18,6 +18,7 @@
+ #include <linux/mmc/card.h>
+ #include <linux/mmc/mmc.h>
+ #include <linux/mmc/sd.h>
++#include <linux/dynaccel.h>
+ 
+ #include "core.h"
+ #include "sd_ops.h"
+@@ -171,7 +172,7 @@ int mmc_send_app_op_cond(struct mmc_host *host, u32 ocr, u32 *rocr)
+ 
+ 		err = -ETIMEDOUT;
+ 
+-		mmc_delay(10);
++		mmc_delay(10 * speedup_ratio);
+ 	}
+ 
+ 	if (!i)
+diff --git a/drivers/mmc/core/sdio_cis.c b/drivers/mmc/core/sdio_cis.c
+index f8c372839..a99aaf1a1 100644
+--- a/drivers/mmc/core/sdio_cis.c
++++ b/drivers/mmc/core/sdio_cis.c
+@@ -20,6 +20,7 @@
+ #include <linux/mmc/card.h>
+ #include <linux/mmc/sdio.h>
+ #include <linux/mmc/sdio_func.h>
++#include <linux/dynaccel.h>
+ 
+ #include "sdio_cis.h"
+ #include "sdio_ops.h"
+@@ -192,7 +193,7 @@ static int cistpl_funce_func(struct mmc_card *card, struct sdio_func *func,
+ 	if (vsn > SDIO_SDIO_REV_1_00)
+ 		func->enable_timeout = (buf[28] | (buf[29] << 8)) * 10;
+ 	else
+-		func->enable_timeout = jiffies_to_msecs(HZ);
++		func->enable_timeout = jiffies_to_msecs(HZ * speedup_ratio);
+ 
+ 	return 0;
+ }
+diff --git a/drivers/mmc/core/sdio_io.c b/drivers/mmc/core/sdio_io.c
+index ed2d8c48e..1693afc8d 100644
+--- a/drivers/mmc/core/sdio_io.c
++++ b/drivers/mmc/core/sdio_io.c
+@@ -14,6 +14,7 @@
+ #include <linux/mmc/card.h>
+ #include <linux/mmc/sdio.h>
+ #include <linux/mmc/sdio_func.h>
++#include <linux/dynaccel.h>
+ 
+ #include "sdio_ops.h"
+ #include "core.h"
+@@ -80,7 +81,7 @@ int sdio_enable_func(struct sdio_func *func)
+ 	if (ret)
+ 		goto err;
+ 
+-	timeout = jiffies + msecs_to_jiffies(func->enable_timeout);
++	timeout = jiffies + msecs_to_jiffies(func->enable_timeout * speedup_ratio);
+ 
+ 	while (1) {
+ 		ret = mmc_io_rw_direct(func->card, 0, 0, SDIO_CCCR_IORx, 0, &reg);
+diff --git a/drivers/mmc/core/sdio_irq.c b/drivers/mmc/core/sdio_irq.c
+index 7ca7b9941..8f1c7415f 100644
+--- a/drivers/mmc/core/sdio_irq.c
++++ b/drivers/mmc/core/sdio_irq.c
+@@ -26,6 +26,7 @@
+ #include <linux/mmc/card.h>
+ #include <linux/mmc/sdio.h>
+ #include <linux/mmc/sdio_func.h>
++#include <linux/dynaccel.h>
+ 
+ #include "sdio_ops.h"
+ #include "core.h"
+@@ -134,9 +135,9 @@ static int sdio_irq_thread(void *_host)
+ 	 * asynchronous notification of pending SDIO card interrupts
+ 	 * hence we poll for them in that case.
+ 	 */
+-	idle_period = msecs_to_jiffies(10);
++	idle_period = msecs_to_jiffies(10 * speedup_ratio);
+ 	period = (host->caps & MMC_CAP_SDIO_IRQ) ?
+-		MAX_SCHEDULE_TIMEOUT : idle_period;
++		MAX_SCHEDULE_TIMEOUT * speedup_ratio : idle_period;
+ 
+ 	pr_debug("%s: IRQ thread started (poll period = %lu jiffies)\n",
+ 		 mmc_hostname(host), period);
+@@ -170,7 +171,7 @@ static int sdio_irq_thread(void *_host)
+ 		if (ret < 0) {
+ 			set_current_state(TASK_INTERRUPTIBLE);
+ 			if (!kthread_should_stop())
+-				schedule_timeout(HZ);
++				schedule_timeout(HZ * speedup_ratio);
+ 			set_current_state(TASK_RUNNING);
+ 		}
+ 
+diff --git a/drivers/mmc/core/sdio_ops.c b/drivers/mmc/core/sdio_ops.c
+index abaaba385..ff61db38f 100644
+--- a/drivers/mmc/core/sdio_ops.c
++++ b/drivers/mmc/core/sdio_ops.c
+@@ -15,6 +15,7 @@
+ #include <linux/mmc/card.h>
+ #include <linux/mmc/mmc.h>
+ #include <linux/mmc/sdio.h>
++#include <linux/dynaccel.h>
+ 
+ #include "core.h"
+ #include "sdio_ops.h"
+@@ -54,7 +55,7 @@ int mmc_send_io_op_cond(struct mmc_host *host, u32 ocr, u32 *rocr)
+ 
+ 		err = -ETIMEDOUT;
+ 
+-		mmc_delay(10);
++		mmc_delay(10 * speedup_ratio);
+ 	}
+ 
+ 	if (rocr)
+diff --git a/drivers/mmc/host/mmci.c b/drivers/mmc/host/mmci.c
+index f1849775e..bf6d1cf53 100644
+--- a/drivers/mmc/host/mmci.c
++++ b/drivers/mmc/host/mmci.c
+@@ -37,6 +37,7 @@
+ #include <linux/pm_runtime.h>
+ #include <linux/types.h>
+ #include <linux/pinctrl/consumer.h>
++#include <linux/dynaccel.h>
+ 
+ #include <asm/div64.h>
+ #include <asm/io.h>
+@@ -325,9 +326,9 @@ static void mmci_reg_delay(struct mmci_host *host)
+ 	 * Worst delay time when up and running is at 25 MHz => 120 ns.
+ 	 */
+ 	if (host->cclk < 25000000)
+-		udelay(30);
++		udelay(30 * speedup_ratio);
+ 	else
+-		ndelay(120);
++		ndelay(120 * speedup_ratio);
+ }
+ 
+ /*
+diff --git a/drivers/mmc/host/sdhci.c b/drivers/mmc/host/sdhci.c
+index 69910edca..ae8c840a2 100644
+--- a/drivers/mmc/host/sdhci.c
++++ b/drivers/mmc/host/sdhci.c
+@@ -25,6 +25,7 @@
+ #include <linux/regulator/consumer.h>
+ #include <linux/pm_runtime.h>
+ #include <linux/of.h>
++#include <linux/dynaccel.h>
+ 
+ #include <linux/leds.h>
+ 
+@@ -199,7 +200,7 @@ void sdhci_reset(struct sdhci_host *host, u8 mask)
+ 			sdhci_dumpregs(host);
+ 			return;
+ 		}
+-		udelay(10);
++		udelay(10 * speedup_ratio);
+ 	}
+ }
+ EXPORT_SYMBOL_GPL(sdhci_reset);
+@@ -475,7 +476,7 @@ static void sdhci_transfer_pio(struct sdhci_host *host)
+ 
+ 	while (sdhci_readl(host, SDHCI_PRESENT_STATE) & mask) {
+ 		if (host->quirks & SDHCI_QUIRK_PIO_NEEDS_DELAY)
+-			udelay(100);
++			udelay(100 * speedup_ratio);
+ 
+ 		if (host->data->flags & MMC_DATA_READ)
+ 			sdhci_read_block_pio(host);
+@@ -734,7 +735,7 @@ static unsigned int sdhci_target_timeout(struct sdhci_host *host,
+ 		}
+ 	}
+ 
+-	return target_timeout;
++	return target_timeout * speedup_ratio;
+ }
+ 
+ static void sdhci_calc_sw_timeout(struct sdhci_host *host,
+@@ -806,7 +807,7 @@ static u8 sdhci_calc_timeout(struct sdhci_host *host, struct mmc_command *cmd,
+ 	 *     (1) / (2) > 2^6
+ 	 */
+ 	count = 0;
+-	current_timeout = (1 << 13) * 1000 / host->timeout_clk;
++	current_timeout = (1 << 13) * 1000 * speedup_ratio / host->timeout_clk;
+ 	while (current_timeout < target_timeout) {
+ 		count++;
+ 		current_timeout <<= 1;
+@@ -1209,7 +1210,7 @@ void sdhci_send_command(struct sdhci_host *host, struct mmc_command *cmd)
+ 		cmd->flags |= MMC_RSP_BUSY;
+ 
+ 	/* Wait max 10 ms */
+-	timeout = 10;
++	timeout = 10 * speedup_ratio;
+ 
+ 	mask = SDHCI_CMD_INHIBIT;
+ 	if (sdhci_data_line_cmd(cmd))
+@@ -1230,7 +1231,7 @@ void sdhci_send_command(struct sdhci_host *host, struct mmc_command *cmd)
+ 			return;
+ 		}
+ 		timeout--;
+-		mdelay(1);
++		mdelay(1 * speedup_ratio);
+ 	}
+ 
+ 	host->cmd = cmd;
+@@ -1272,13 +1273,13 @@ void sdhci_send_command(struct sdhci_host *host, struct mmc_command *cmd)
+ 	    cmd->opcode == MMC_SEND_TUNING_BLOCK_HS200)
+ 		flags |= SDHCI_CMD_DATA;
+ 
+-	timeout = jiffies;
++	timeout = jiffies * speedup_ratio;
+ 	if (host->data_timeout)
+ 		timeout += nsecs_to_jiffies(host->data_timeout);
+ 	else if (!cmd->data && cmd->busy_timeout > 9000)
+-		timeout += DIV_ROUND_UP(cmd->busy_timeout, 1000) * HZ + HZ;
++		timeout += DIV_ROUND_UP(cmd->busy_timeout, 1000) * HZ * speedup_ratio + HZ;
+ 	else
+-		timeout += 10 * HZ;
++		timeout += 10 * HZ * speedup_ratio;
+ 	sdhci_mod_timer(host, cmd->mrq, timeout);
+ 
+ 	sdhci_writew(host, SDHCI_MAKE_CMD(cmd->opcode, flags), SDHCI_COMMAND);
+@@ -1606,7 +1607,7 @@ void sdhci_set_power_noreg(struct sdhci_host *host, unsigned char mode,
+ 		 * they can apply clock after applying power
+ 		 */
+ 		if (host->quirks & SDHCI_QUIRK_DELAY_AFTER_POWER)
+-			mdelay(10);
++			mdelay(10 * speedup_ratio);
+ 	}
+ }
+ EXPORT_SYMBOL_GPL(sdhci_set_power_noreg);
+@@ -1932,7 +1933,7 @@ static int sdhci_get_ro(struct mmc_host *mmc)
+ 			if (++ro_count > SAMPLE_COUNT / 2)
+ 				return 1;
+ 		}
+-		msleep(30);
++		msleep(30 * speedup_ratio);
+ 	}
+ 	return 0;
+ }
+@@ -2203,7 +2204,7 @@ static void sdhci_send_tuning(struct sdhci_host *host, u32 opcode)
+ 
+ 	/* Wait for Buffer Read Ready interrupt */
+ 	wait_event_timeout(host->buf_ready_int, (host->tuning_done == 1),
+-			   msecs_to_jiffies(50));
++			   msecs_to_jiffies(50) * speedup_ratio);
+ 
+ }
+ 
+@@ -2944,7 +2945,7 @@ static irqreturn_t sdhci_thread_irq(int irq, void *dev_id)
+ 		struct mmc_host *mmc = host->mmc;
+ 
+ 		mmc->ops->card_event(mmc);
+-		mmc_detect_change(mmc, msecs_to_jiffies(200));
++		mmc_detect_change(mmc, msecs_to_jiffies(200) * speedup_ratio);
+ 	}
+ 
+ 	if (isr & SDHCI_INT_CARD_INT) {
+diff --git a/drivers/rtc/rtc-dev.c b/drivers/rtc/rtc-dev.c
+index 5a8112411..449be6f3b 100644
+--- a/drivers/rtc/rtc-dev.c
++++ b/drivers/rtc/rtc-dev.c
+@@ -17,6 +17,7 @@
+ #include <linux/module.h>
+ #include <linux/rtc.h>
+ #include <linux/sched/signal.h>
++#include <linux/dynaccel.h>
+ #include "rtc-core.h"
+ 
+ static dev_t rtc_devt;
+@@ -61,7 +62,7 @@ static void rtc_uie_task(struct work_struct *work)
+ 	} else if (rtc->oldsecs != tm.tm_sec) {
+ 		num = (tm.tm_sec + 60 - rtc->oldsecs) % 60;
+ 		rtc->oldsecs = tm.tm_sec;
+-		rtc->uie_timer.expires = jiffies + HZ - (HZ/10);
++		rtc->uie_timer.expires = (jiffies + HZ - (HZ/10)) * speedup_ratio;
+ 		rtc->uie_timer_active = 1;
+ 		rtc->uie_task_active = 0;
+ 		add_timer(&rtc->uie_timer);
+diff --git a/drivers/scsi/scsi_error.c b/drivers/scsi/scsi_error.c
+index 04670c98a..4d876bf9b 100644
+--- a/drivers/scsi/scsi_error.c
++++ b/drivers/scsi/scsi_error.c
+@@ -27,6 +27,7 @@
+ #include <linux/blkdev.h>
+ #include <linux/delay.h>
+ #include <linux/jiffies.h>
++#include <linux/dynaccel.h>
+ 
+ #include <scsi/scsi.h>
+ #include <scsi/scsi_cmnd.h>
+@@ -333,7 +334,7 @@ enum blk_eh_timer_return scsi_times_out(struct request *req)
+ 	struct Scsi_Host *host = scmd->device->host;
+ 
+ 	trace_scsi_dispatch_cmd_timeout(scmd);
+-	scsi_log_completion(scmd, TIMEOUT_ERROR);
++	scsi_log_completion(scmd, TIMEOUT_ERROR * speedup_ratio);
+ 
+ 	if (host->eh_deadline != -1 && !host->last_reset)
+ 		host->last_reset = jiffies;
+@@ -1148,7 +1149,7 @@ retry:
+ 		timeleft = 0;
+ 		rtn = FAILED;
+ 	} else {
+-		timeleft = wait_for_completion_timeout(&done, timeout);
++		timeleft = wait_for_completion_timeout(&done, timeout * speedup_ratio);
+ 		rtn = SUCCESS;
+ 	}
+ 
+@@ -1207,7 +1208,7 @@ retry:
+  */
+ static int scsi_request_sense(struct scsi_cmnd *scmd)
+ {
+-	return scsi_send_eh_cmnd(scmd, NULL, 0, scmd->device->eh_timeout, ~0);
++	return scsi_send_eh_cmnd(scmd, NULL, 0, scmd->device->eh_timeout * speedup_ratio, ~0);
+ }
+ 
+ static int scsi_eh_action(struct scsi_cmnd *scmd, int rtn)
+@@ -1345,7 +1346,7 @@ static int scsi_eh_tur(struct scsi_cmnd *scmd)
+ 
+ retry_tur:
+ 	rtn = scsi_send_eh_cmnd(scmd, tur_command, 6,
+-				scmd->device->eh_timeout, 0);
++				scmd->device->eh_timeout * speedup_ratio, 0);
+ 
+ 	SCSI_LOG_ERROR_RECOVERY(3, scmd_printk(KERN_INFO, scmd,
+ 		"%s return: %x\n", __func__, rtn));
+@@ -1432,7 +1433,7 @@ static int scsi_eh_try_stu(struct scsi_cmnd *scmd)
+ 		int i, rtn = NEEDS_RETRY;
+ 
+ 		for (i = 0; rtn == NEEDS_RETRY && i < 2; i++)
+-			rtn = scsi_send_eh_cmnd(scmd, stu_command, 6, scmd->device->request_queue->rq_timeout, 0);
++			rtn = scsi_send_eh_cmnd(scmd, stu_command, 6, scmd->device->request_queue->rq_timeout * speedup_ratio, 0);
+ 
+ 		if (rtn == SUCCESS)
+ 			return 0;
+@@ -2047,7 +2048,7 @@ static void scsi_eh_lock_door(struct scsi_device *sdev)
+ 	rq->cmd_len = COMMAND_SIZE(rq->cmd[0]);
+ 
+ 	req->rq_flags |= RQF_QUIET;
+-	req->timeout = 10 * HZ;
++	req->timeout = 10 * HZ * speedup_ratio;
+ 	rq->retries = 5;
+ 
+ 	blk_execute_rq_nowait(req->q, NULL, req, 1, eh_lock_door_done);
+diff --git a/drivers/scsi/scsi_ioctl.c b/drivers/scsi/scsi_ioctl.c
+index 07674ac32..ba1dd77c3 100644
+--- a/drivers/scsi/scsi_ioctl.c
++++ b/drivers/scsi/scsi_ioctl.c
+@@ -14,6 +14,7 @@
+ #include <linux/mm.h>
+ #include <linux/string.h>
+ #include <linux/uaccess.h>
++#include <linux/dynaccel.h>
+ 
+ #include <scsi/scsi.h>
+ #include <scsi/scsi_cmnd.h>
+@@ -155,7 +156,7 @@ int scsi_set_medium_removal(struct scsi_device *sdev, char state)
+ 	scsi_cmd[5] = 0;
+ 
+ 	ret = ioctl_internal_command(sdev, scsi_cmd,
+-			IOCTL_NORMAL_TIMEOUT, NORMAL_RETRIES);
++			IOCTL_NORMAL_TIMEOUT * speedup_ratio, NORMAL_RETRIES);
+ 	if (ret == 0)
+ 		sdev->locked = (state == SCSI_REMOVAL_PREVENT);
+ 	return ret;
+@@ -246,7 +247,7 @@ int scsi_ioctl(struct scsi_device *sdev, int cmd, void __user *arg)
+ 	case SCSI_IOCTL_DOORUNLOCK:
+ 		return scsi_set_medium_removal(sdev, SCSI_REMOVAL_ALLOW);
+ 	case SCSI_IOCTL_TEST_UNIT_READY:
+-		return scsi_test_unit_ready(sdev, IOCTL_NORMAL_TIMEOUT,
++		return scsi_test_unit_ready(sdev, IOCTL_NORMAL_TIMEOUT * speedup_ratio,
+ 					    NORMAL_RETRIES, &sense_hdr);
+ 	case SCSI_IOCTL_START_UNIT:
+ 		scsi_cmd[0] = START_STOP;
+@@ -254,14 +255,14 @@ int scsi_ioctl(struct scsi_device *sdev, int cmd, void __user *arg)
+ 		scsi_cmd[2] = scsi_cmd[3] = scsi_cmd[5] = 0;
+ 		scsi_cmd[4] = 1;
+ 		return ioctl_internal_command(sdev, scsi_cmd,
+-				     START_STOP_TIMEOUT, NORMAL_RETRIES);
++				     START_STOP_TIMEOUT * speedup_ratio, NORMAL_RETRIES);
+ 	case SCSI_IOCTL_STOP_UNIT:
+ 		scsi_cmd[0] = START_STOP;
+ 		scsi_cmd[1] = 0;
+ 		scsi_cmd[2] = scsi_cmd[3] = scsi_cmd[5] = 0;
+ 		scsi_cmd[4] = 0;
+ 		return ioctl_internal_command(sdev, scsi_cmd,
+-				     START_STOP_TIMEOUT, NORMAL_RETRIES);
++				     START_STOP_TIMEOUT * speedup_ratio, NORMAL_RETRIES);
+         case SCSI_IOCTL_GET_PCI:
+                 return scsi_ioctl_get_pci(sdev, arg);
+ 	case SG_SCSI_RESET:
+diff --git a/drivers/scsi/scsi_lib.c b/drivers/scsi/scsi_lib.c
+index 4fab3e007..47320e5c0 100644
+--- a/drivers/scsi/scsi_lib.c
++++ b/drivers/scsi/scsi_lib.c
+@@ -23,6 +23,7 @@
+ #include <linux/blk-mq.h>
+ #include <linux/ratelimit.h>
+ #include <asm/unaligned.h>
++#include <linux/dynaccel.h>
+ 
+ #include <scsi/scsi.h>
+ #include <scsi/scsi_cmnd.h>
+@@ -667,7 +668,7 @@ static bool scsi_cmd_runtime_exceeced(struct scsi_cmnd *cmd)
+ 		return false;
+ 
+ 	wait_for = (cmd->allowed + 1) * req->timeout;
+-	if (time_before(cmd->jiffies_at_alloc + wait_for, jiffies)) {
++	if (time_before(cmd->jiffies_at_alloc + wait_for * speedup_ratio, jiffies)) {
+ 		scmd_printk(KERN_ERR, cmd, "timing out command, waited %lus\n",
+ 			    wait_for/HZ);
+ 		return true;
+diff --git a/drivers/scsi/scsi_sysfs.c b/drivers/scsi/scsi_sysfs.c
+index 19362c78b..29495a56e 100644
+--- a/drivers/scsi/scsi_sysfs.c
++++ b/drivers/scsi/scsi_sysfs.c
+@@ -13,6 +13,7 @@
+ #include <linux/blkdev.h>
+ #include <linux/device.h>
+ #include <linux/pm_runtime.h>
++#include <linux/dynaccel.h>
+ 
+ #include <scsi/scsi.h>
+ #include <scsi/scsi_device.h>
+@@ -751,7 +752,7 @@ sdev_store_timeout (struct device *dev, struct device_attribute *attr,
+ 	int timeout;
+ 	sdev = to_scsi_device(dev);
+ 	sscanf (buf, "%d\n", &timeout);
+-	blk_queue_rq_timeout(sdev->request_queue, timeout * HZ);
++	blk_queue_rq_timeout(sdev->request_queue, timeout * HZ * speedup_ratio);
+ 	return count;
+ }
+ static DEVICE_ATTR(timeout, S_IRUGO | S_IWUSR, sdev_show_timeout, sdev_store_timeout);
+diff --git a/drivers/scsi/sd.c b/drivers/scsi/sd.c
+index 4df56aac5..c61841ac1 100644
+--- a/drivers/scsi/sd.c
++++ b/drivers/scsi/sd.c
+@@ -57,6 +57,7 @@
+ #include <linux/pr.h>
+ #include <linux/t10-pi.h>
+ #include <linux/uaccess.h>
++#include <linux/dynaccel.h>
+ #include <asm/unaligned.h>
+ 
+ #include <scsi/scsi.h>
+@@ -193,7 +194,7 @@ cache_type_store(struct device *dev, struct device_attribute *attr,
+ 		return count;
+ 	}
+ 
+-	if (scsi_mode_sense(sdp, 0x08, 8, buffer, sizeof(buffer), SD_TIMEOUT,
++	if (scsi_mode_sense(sdp, 0x08, 8, buffer, sizeof(buffer), SD_TIMEOUT * speedup_ratio,
+ 			    sdkp->aux->max_retries, &data, NULL))
+ 		return -EINVAL;
+ 	len = min_t(size_t, sizeof(buffer), data.length - data.header_length -
+@@ -211,7 +212,7 @@ cache_type_store(struct device *dev, struct device_attribute *attr,
+ 	 */
+ 	data.device_specific = 0;
+ 
+-	if (scsi_mode_select(sdp, 1, sp, 8, buffer_data, len, SD_TIMEOUT,
++	if (scsi_mode_select(sdp, 1, sp, 8, buffer_data, len, SD_TIMEOUT * speedup_ratio,
+ 			     sdkp->aux->max_retries, &data, &sshdr)) {
+ 		if (scsi_sense_valid(&sshdr))
+ 			sd_print_sense_hdr(sdkp, &sshdr);
+@@ -708,7 +709,7 @@ static int sd_sec_submit(void *data, u16 spsp, u8 secp, void *buffer,
+ 
+ 	ret = scsi_execute_req(sdev, cdb,
+ 			send ? DMA_TO_DEVICE : DMA_FROM_DEVICE,
+-			buffer, len, NULL, SD_TIMEOUT, sdkp->aux->max_retries,
++			buffer, len, NULL, SD_TIMEOUT * speedup_ratio, sdkp->aux->max_retries,
+ 			NULL);
+ 	return ret <= 0 ? ret : -EIO;
+ }
+@@ -836,7 +837,7 @@ static blk_status_t sd_setup_unmap_cmnd(struct scsi_cmnd *cmd)
+ 
+ 	cmd->allowed = sdkp->aux->max_retries;
+ 	cmd->transfersize = data_len;
+-	rq->timeout = SD_TIMEOUT;
++	rq->timeout = SD_TIMEOUT * speedup_ratio;
+ 	scsi_req(rq)->resid_len = data_len;
+ 
+ 	return scsi_alloc_sgtables(cmd);
+@@ -869,7 +870,7 @@ static blk_status_t sd_setup_write_same16_cmnd(struct scsi_cmnd *cmd,
+ 
+ 	cmd->allowed = sdkp->aux->max_retries;
+ 	cmd->transfersize = data_len;
+-	rq->timeout = unmap ? SD_TIMEOUT : SD_WRITE_SAME_TIMEOUT;
++	rq->timeout = (unmap ? SD_TIMEOUT : SD_WRITE_SAME_TIMEOUT) * speedup_ratio;
+ 	scsi_req(rq)->resid_len = data_len;
+ 
+ 	return scsi_alloc_sgtables(cmd);
+@@ -902,7 +903,7 @@ static blk_status_t sd_setup_write_same10_cmnd(struct scsi_cmnd *cmd,
+ 
+ 	cmd->allowed = sdkp->aux->max_retries;
+ 	cmd->transfersize = data_len;
+-	rq->timeout = unmap ? SD_TIMEOUT : SD_WRITE_SAME_TIMEOUT;
++	rq->timeout = (unmap ? SD_TIMEOUT : SD_WRITE_SAME_TIMEOUT) * speedup_ratio;
+ 	scsi_req(rq)->resid_len = data_len;
+ 
+ 	return scsi_alloc_sgtables(cmd);
+@@ -1613,7 +1614,7 @@ static unsigned int sd_check_events(struct gendisk *disk, unsigned int clearing)
+ 	if (scsi_block_when_processing_errors(sdp)) {
+ 		struct scsi_sense_hdr sshdr = { 0, };
+ 
+-		retval = scsi_test_unit_ready(sdp, SD_TIMEOUT,
++		retval = scsi_test_unit_ready(sdp, SD_TIMEOUT * speedup_ratio,
+ 					      sdkp->aux->max_retries,
+ 					      &sshdr);
+ 
+@@ -1784,7 +1785,7 @@ static int sd_pr_command(struct block_device *bdev, u8 sa,
+ 	data[20] = flags;
+ 
+ 	result = scsi_execute_req(sdev, cmd, DMA_TO_DEVICE, &data, sizeof(data),
+-			&sshdr, SD_TIMEOUT, sdkp->aux->max_retries, NULL);
++			&sshdr, SD_TIMEOUT * speedup_ratio, sdkp->aux->max_retries, NULL);
+ 
+ 	if (driver_byte(result) == DRIVER_SENSE &&
+ 	    scsi_sense_valid(&sshdr)) {
+@@ -2119,7 +2120,7 @@ sd_spinup_disk(struct scsi_disk *sdkp)
+ 
+ 			the_result = scsi_execute_req(sdkp->device, cmd,
+ 						      DMA_NONE, NULL, 0,
+-						      &sshdr, SD_TIMEOUT,
++						      &sshdr, SD_TIMEOUT * speedup_ratio,
+ 						      sdkp->aux->max_retries,
+ 						      NULL);
+ 
+@@ -2176,13 +2177,13 @@ sd_spinup_disk(struct scsi_disk *sdkp)
+ 				if (sdkp->device->start_stop_pwr_cond)
+ 					cmd[4] |= 1 << 4;
+ 				scsi_execute_req(sdkp->device, cmd, DMA_NONE,
+-						 NULL, 0, &sshdr, SD_TIMEOUT,
++						 NULL, 0, &sshdr, SD_TIMEOUT * speedup_ratio,
+ 						 sdkp->aux->max_retries, NULL);
+-				spintime_expire = jiffies + 100 * HZ;
++				spintime_expire = jiffies + 100 * HZ * speedup_ratio;
+ 				spintime = 1;
+ 			}
+ 			/* Wait 1 second for next try */
+-			msleep(1000);
++			msleep(1000 * speedup_ratio);
+ 			printk(KERN_CONT ".");
+ 
+ 		/*
+@@ -2194,11 +2195,11 @@ sd_spinup_disk(struct scsi_disk *sdkp)
+ 				sshdr.sense_key == UNIT_ATTENTION &&
+ 				sshdr.asc == 0x28) {
+ 			if (!spintime) {
+-				spintime_expire = jiffies + 5 * HZ;
++				spintime_expire = jiffies + 5 * HZ * speedup_ratio;
+ 				spintime = 1;
+ 			}
+ 			/* Wait 1 second for next try */
+-			msleep(1000);
++			msleep(1000 * speedup_ratio);
+ 		} else {
+ 			/* we don't understand the sense code, so it's
+ 			 * probably pointless to loop */
+@@ -2317,7 +2318,7 @@ static int read_capacity_16(struct scsi_disk *sdkp, struct scsi_device *sdp,
+ 		memset(buffer, 0, RC16_LEN);
+ 
+ 		the_result = scsi_execute_req(sdp, cmd, DMA_FROM_DEVICE,
+-					buffer, RC16_LEN, &sshdr, SD_TIMEOUT,
++					buffer, RC16_LEN, &sshdr, SD_TIMEOUT * speedup_ratio,
+ 					sdkp->aux->max_retries, NULL);
+ 
+ 		if (media_not_present(sdkp, &sshdr))
+@@ -2402,7 +2403,7 @@ static int read_capacity_10(struct scsi_disk *sdkp, struct scsi_device *sdp,
+ 		memset(buffer, 0, 8);
+ 
+ 		the_result = scsi_execute_req(sdp, cmd, DMA_FROM_DEVICE,
+-					buffer, 8, &sshdr, SD_TIMEOUT,
++					buffer, 8, &sshdr, SD_TIMEOUT * speedup_ratio,
+ 					sdkp->aux->max_retries, NULL);
+ 
+ 		if (media_not_present(sdkp, &sshdr))
+@@ -2593,7 +2594,7 @@ sd_do_mode_sense(struct scsi_disk *sdkp, int dbd, int modepage,
+ 		 struct scsi_sense_hdr *sshdr)
+ {
+ 	return scsi_mode_sense(sdkp->device, dbd, modepage, buffer, len,
+-			       SD_TIMEOUT, sdkp->aux->max_retries, data,
++			       SD_TIMEOUT * speedup_ratio, sdkp->aux->max_retries, data,
+ 			       sshdr);
+ }
+ 
+@@ -2850,7 +2851,7 @@ static void sd_read_app_tag_own(struct scsi_disk *sdkp, unsigned char *buffer)
+ 	if (sdkp->protection_type == 0)
+ 		return;
+ 
+-	res = scsi_mode_sense(sdp, 1, 0x0a, buffer, 36, SD_TIMEOUT,
++	res = scsi_mode_sense(sdp, 1, 0x0a, buffer, 36, SD_TIMEOUT * speedup_ratio,
+ 			      sdkp->aux->max_retries, &data, &sshdr);
+ 
+ 	if (!scsi_status_is_good(res) || !data.header_length ||
+@@ -3449,10 +3450,10 @@ static int sd_probe(struct device *dev)
+ 
+ 	if (!sdp->request_queue->rq_timeout) {
+ 		if (sdp->type != TYPE_MOD)
+-			blk_queue_rq_timeout(sdp->request_queue, SD_TIMEOUT);
++			blk_queue_rq_timeout(sdp->request_queue, SD_TIMEOUT * speedup_ratio);
+ 		else
+ 			blk_queue_rq_timeout(sdp->request_queue,
+-					     SD_MOD_TIMEOUT);
++					     SD_MOD_TIMEOUT * speedup_ratio);
+ 	}
+ 
+ 	device_initialize(&sdkp->dev);
+@@ -3574,7 +3575,7 @@ static int sd_start_stop_device(struct scsi_disk *sdkp, int start)
+ 		return -ENODEV;
+ 
+ 	res = scsi_execute(sdp, cmd, DMA_NONE, NULL, 0, NULL, &sshdr,
+-			SD_TIMEOUT, sdkp->aux->max_retries, 0, RQF_PM, NULL);
++			SD_TIMEOUT * speedup_ratio, sdkp->aux->max_retries, 0, RQF_PM, NULL);
+ 	if (res) {
+ 		sd_print_result(sdkp, "Start/Stop Unit failed", res);
+ 		if (driver_byte(res) == DRIVER_SENSE)
+diff --git a/drivers/tty/n_tty.c b/drivers/tty/n_tty.c
+index 74040d3b9..2aa4b8d59 100644
+--- a/drivers/tty/n_tty.c
++++ b/drivers/tty/n_tty.c
+@@ -49,6 +49,7 @@
+ #include <linux/module.h>
+ #include <linux/ratelimit.h>
+ #include <linux/vmalloc.h>
++#include <linux/dynaccel.h>
+ 
+ 
+ /* number of characters left in xmit buffer before select has we have room */
+@@ -1202,7 +1203,7 @@ static void n_tty_receive_overrun(struct tty_struct *tty)
+ 	if (time_after(jiffies, ldata->overrun_time + HZ) ||
+ 			time_after(ldata->overrun_time, jiffies)) {
+ 		tty_warn(tty, "%d input overrun(s)\n", ldata->num_overrun);
+-		ldata->overrun_time = jiffies;
++		ldata->overrun_time = jiffies * speedup_ratio;
+ 		ldata->num_overrun = 0;
+ 	}
+ }
+@@ -1915,7 +1916,7 @@ static int n_tty_open(struct tty_struct *tty)
+ 	if (!ldata)
+ 		return -ENOMEM;
+ 
+-	ldata->overrun_time = jiffies;
++	ldata->overrun_time = jiffies * speedup_ratio;
+ 	mutex_init(&ldata->atomic_read_lock);
+ 	mutex_init(&ldata->output_lock);
+ 
+@@ -2164,9 +2165,9 @@ static ssize_t n_tty_read(struct tty_struct *tty, struct file *file,
+ 	if (!ldata->icanon) {
+ 		minimum = MIN_CHAR(tty);
+ 		if (minimum) {
+-			time = (HZ / 10) * TIME_CHAR(tty);
++			time = (HZ / 10) * TIME_CHAR(tty) * speedup_ratio;
+ 		} else {
+-			timeout = (HZ / 10) * TIME_CHAR(tty);
++			timeout = (HZ / 10) * TIME_CHAR(tty) * speedup_ratio;
+ 			minimum = 1;
+ 		}
+ 	}
+diff --git a/drivers/tty/tty_ioctl.c b/drivers/tty/tty_ioctl.c
+index d99fec440..6981540d8 100644
+--- a/drivers/tty/tty_ioctl.c
++++ b/drivers/tty/tty_ioctl.c
+@@ -21,6 +21,7 @@
+ #include <linux/bitops.h>
+ #include <linux/mutex.h>
+ #include <linux/compat.h>
++#include <linux/dynaccel.h>
+ 
+ #include <asm/io.h>
+ #include <linux/uaccess.h>
+@@ -220,7 +221,7 @@ void tty_wait_until_sent(struct tty_struct *tty, long timeout)
+ 	tty_debug_wait_until_sent(tty, "wait until sent, timeout=%ld\n", timeout);
+ 
+ 	if (!timeout)
+-		timeout = MAX_SCHEDULE_TIMEOUT;
++		timeout = MAX_SCHEDULE_TIMEOUT * speedup_ratio;
+ 
+ 	timeout = wait_event_interruptible_timeout(tty->write_wait,
+ 			!tty_chars_in_buffer(tty), timeout);
+diff --git a/drivers/tty/tty_port.c b/drivers/tty/tty_port.c
+index 25d736880..564fac74c 100644
+--- a/drivers/tty/tty_port.c
++++ b/drivers/tty/tty_port.c
+@@ -18,6 +18,7 @@
+ #include <linux/delay.h>
+ #include <linux/module.h>
+ #include <linux/serdev.h>
++#include <linux/dynaccel.h>
+ 
+ static int tty_port_default_receive_buf(struct tty_port *port,
+ 					const unsigned char *p,
+@@ -553,7 +554,7 @@ static void tty_port_drain_delay(struct tty_port *port, struct tty_struct *tty)
+ 	long timeout;
+ 
+ 	if (bps > 1200) {
+-		timeout = (HZ * 10 * port->drain_delay) / bps;
++		timeout = (HZ * 10 * port->drain_delay * speedup_ratio) / bps;
+ 		timeout = max_t(long, timeout, HZ / 10);
+ 	} else {
+ 		timeout = 2 * HZ;
+@@ -620,7 +621,7 @@ void tty_port_close_end(struct tty_port *port, struct tty_struct *tty)
+ 	if (port->blocked_open) {
+ 		spin_unlock_irqrestore(&port->lock, flags);
+ 		if (port->close_delay)
+-			msleep_interruptible(jiffies_to_msecs(port->close_delay));
++			msleep_interruptible(jiffies_to_msecs(port->close_delay * speedup_ratio));
+ 		spin_lock_irqsave(&port->lock, flags);
+ 		wake_up_interruptible(&port->open_wait);
+ 	}
+diff --git a/drivers/tty/vt/keyboard.c b/drivers/tty/vt/keyboard.c
+index 06c0fcac6..b985f30fb 100644
+--- a/drivers/tty/vt/keyboard.c
++++ b/drivers/tty/vt/keyboard.c
+@@ -45,6 +45,7 @@
+ #include <linux/notifier.h>
+ #include <linux/jiffies.h>
+ #include <linux/uaccess.h>
++#include <linux/dynaccel.h>
+ 
+ #include <asm/irq_regs.h>
+ 
+@@ -264,7 +265,7 @@ void kd_mksound(unsigned int hz, unsigned int ticks)
+ 	input_handler_for_each_handle(&kbd_handler, &hz, kd_sound_helper);
+ 
+ 	if (hz && ticks)
+-		mod_timer(&kd_mksound_timer, jiffies + ticks);
++		mod_timer(&kd_mksound_timer, jiffies + ticks * speedup_ratio);
+ }
+ EXPORT_SYMBOL(kd_mksound);
+ 
+@@ -940,7 +941,7 @@ static void k_brl(struct vc_data *vc, unsigned char value, char up_flag)
+ 	} else if (brl_timeout) {
+ 		if (!committing ||
+ 		    time_after(jiffies,
+-			       releasestart + msecs_to_jiffies(brl_timeout))) {
++			       releasestart + msecs_to_jiffies(brl_timeout * speedup_ratio))) {
+ 			committing = pressed;
+ 			releasestart = jiffies;
+ 		}
+diff --git a/drivers/tty/vt/vt.c b/drivers/tty/vt/vt.c
+index e02f07c2e..716928c17 100644
+--- a/drivers/tty/vt/vt.c
++++ b/drivers/tty/vt/vt.c
+@@ -104,6 +104,7 @@
+ #include <linux/kdb.h>
+ #include <linux/ctype.h>
+ #include <linux/bsearch.h>
++#include <linux/dynaccel.h>
+ 
+ #define MAX_NR_CON_DRIVER 16
+ 
+@@ -3223,7 +3224,7 @@ static int __init con_init(void)
+ 
+ 	if (blankinterval) {
+ 		blank_state = blank_normal_wait;
+-		mod_timer(&console_timer, jiffies + (blankinterval * HZ));
++		mod_timer(&console_timer, jiffies + (blankinterval * HZ) * speedup_ratio);
+ 	}
+ 
+ 	for (currcons = 0; currcons < MIN_NR_CONSOLES; currcons++) {
+@@ -4085,7 +4086,7 @@ void do_blank_screen(int entering_gfx)
+ 
+ 	if (vesa_off_interval && vesa_blank_mode) {
+ 		blank_state = blank_vesa_wait;
+-		mod_timer(&console_timer, jiffies + vesa_off_interval);
++		mod_timer(&console_timer, jiffies + vesa_off_interval * speedup_ratio);
+ 	}
+ 	vt_event_post(VT_EVENT_BLANK, vc->vc_num, vc->vc_num);
+ }
+@@ -4121,7 +4122,7 @@ void do_unblank_screen(int leaving_gfx)
+ 		return; /* but leave console_blanked != 0 */
+ 
+ 	if (blankinterval) {
+-		mod_timer(&console_timer, jiffies + (blankinterval * HZ));
++		mod_timer(&console_timer, jiffies + (blankinterval * HZ) * speedup_ratio);
+ 		blank_state = blank_normal_wait;
+ 	}
+ 
+@@ -4182,7 +4183,7 @@ void poke_blanked_console(void)
+ 	if (console_blanked)
+ 		unblank_screen();
+ 	else if (blankinterval) {
+-		mod_timer(&console_timer, jiffies + (blankinterval * HZ));
++		mod_timer(&console_timer, jiffies + (blankinterval * HZ) * speedup_ratio);
+ 		blank_state = blank_normal_wait;
+ 	}
+ }
+diff --git a/drivers/tty/vt/vt_ioctl.c b/drivers/tty/vt/vt_ioctl.c
+index c648b550d..d53bd7c86 100644
+--- a/drivers/tty/vt/vt_ioctl.c
++++ b/drivers/tty/vt/vt_ioctl.c
+@@ -28,6 +28,7 @@
+ #include <linux/signal.h>
+ #include <linux/suspend.h>
+ #include <linux/timex.h>
++#include <linux/dynaccel.h>
+ 
+ #include <asm/io.h>
+ #include <linux/uaccess.h>
+@@ -404,7 +405,7 @@ int vt_ioctl(struct tty_struct *tty,
+ 		 * Generate the tone for the appropriate number of ticks.
+ 		 * If the time is zero, turn off sound ourselves.
+ 		 */
+-		ticks = msecs_to_jiffies((arg >> 16) & 0xffff);
++		ticks = msecs_to_jiffies(((arg >> 16) & 0xffff) * speedup_ratio);
+ 		count = ticks ? (arg & 0xffff) : 0;
+ 		if (count)
+ 			count = PIT_TICK_RATE / count;
+diff --git a/fs/jbd2/journal.c b/fs/jbd2/journal.c
+index 35ceda945..69509707c 100644
+--- a/fs/jbd2/journal.c
++++ b/fs/jbd2/journal.c
+@@ -41,6 +41,7 @@
+ #include <linux/bitops.h>
+ #include <linux/ratelimit.h>
+ #include <linux/sched/mm.h>
++#include <linux/dynaccel.h>
+ 
+ #define CREATE_TRACE_POINTS
+ #include <trace/events/jbd2.h>
+@@ -241,7 +242,7 @@ loop:
+ 			should_sleep = 0;
+ 		transaction = journal->j_running_transaction;
+ 		if (transaction && time_after_eq(jiffies,
+-						transaction->t_expires))
++						transaction->t_expires * speedup_ratio))
+ 			should_sleep = 0;
+ 		if (journal->j_flags & JBD2_UNMOUNT)
+ 			should_sleep = 0;
+@@ -259,7 +260,7 @@ loop:
+ 	 * Were we woken up by a commit wakeup event?
+ 	 */
+ 	transaction = journal->j_running_transaction;
+-	if (transaction && time_after_eq(jiffies, transaction->t_expires)) {
++	if (transaction && time_after_eq(jiffies, transaction->t_expires * speedup_ratio)) {
+ 		journal->j_commit_request = transaction->t_tid;
+ 		jbd_debug(1, "woke because of timeout\n");
+ 	}
+diff --git a/fs/jbd2/transaction.c b/fs/jbd2/transaction.c
+index 1c831bb8b..18a48fe4a 100644
+--- a/fs/jbd2/transaction.c
++++ b/fs/jbd2/transaction.c
+@@ -27,6 +27,7 @@
+ #include <linux/bug.h>
+ #include <linux/module.h>
+ #include <linux/sched/mm.h>
++#include <linux/dynaccel.h>
+ 
+ #include <trace/events/jbd2.h>
+ 
+@@ -106,7 +107,7 @@ static void jbd2_get_transaction(journal_t *journal,
+ 	transaction->t_state = T_RUNNING;
+ 	transaction->t_start_time = ktime_get();
+ 	transaction->t_tid = journal->j_transaction_sequence++;
+-	transaction->t_expires = jiffies + journal->j_commit_interval;
++	transaction->t_expires = jiffies + journal->j_commit_interval * speedup_ratio; 
+ 	spin_lock_init(&transaction->t_handle_lock);
+ 	atomic_set(&transaction->t_updates, 0);
+ 	atomic_set(&transaction->t_outstanding_credits,
+diff --git a/fs/locks.c b/fs/locks.c
+index 347260eff..330e76561 100644
+--- a/fs/locks.c
++++ b/fs/locks.c
+@@ -127,6 +127,7 @@
+ #include <linux/pid_namespace.h>
+ #include <linux/hashtable.h>
+ #include <linux/percpu.h>
++#include <linux/dynaccel.h>
+ 
+ #define CREATE_TRACE_POINTS
+ #include <trace/events/filelock.h>
+@@ -1488,7 +1489,7 @@ int __break_lease(struct inode *inode, unsigned int mode, unsigned int type)
+ 
+ 	break_time = 0;
+ 	if (lease_break_time > 0) {
+-		break_time = jiffies + lease_break_time * HZ;
++		break_time = jiffies + (lease_break_time * HZ) * speedup_ratio;
+ 		if (break_time == 0)
+ 			break_time++;	/* so that 0 means no break time */
+ 	}
+diff --git a/fs/select.c b/fs/select.c
+index 64d96664b..d0c4052b7 100644
+--- a/fs/select.c
++++ b/fs/select.c
+@@ -31,6 +31,7 @@
+ #include <linux/freezer.h>
+ #include <net/busy_poll.h>
+ #include <linux/vmalloc.h>
++#include <linux/dynaccel.h>
+ 
+ #include <linux/uaccess.h>
+ 
+@@ -995,6 +996,7 @@ SYSCALL_DEFINE3(poll, struct pollfd __user *, ufds, unsigned int, nfds,
+ 
+ 	if (timeout_msecs >= 0) {
+ 		to = &end_time;
++		timeout_msecs *= speedup_ratio;
+ 		poll_select_set_timeout(to, timeout_msecs / MSEC_PER_SEC,
+ 			NSEC_PER_MSEC * (timeout_msecs % MSEC_PER_SEC));
+ 	}
+diff --git a/include/linux/dynaccel.h b/include/linux/dynaccel.h
+new file mode 100644
+index 000000000..c3364d373
+--- /dev/null
++++ b/include/linux/dynaccel.h
+@@ -0,0 +1,16 @@
++/*
++ * Dynamic (Fake) Acceleration for Linux Kernel
++ * Copyright (C) 2022 OSTEP 
++ */
++
++#ifndef _LINUX_DYNACCEL_H
++#define _LINUX_DYNACCEL_H
++
++
++#define DEFAULT_SPEEDUP_RATIO 1 /* NO ACCELERATION */
++
++#ifdef __KERNEL__
++extern unsigned int speedup_ratio;
++#endif /* __KERNEL__ */
++
++#endif /* _LINUX_DYNACCEL_H */
+diff --git a/include/uapi/linux/sysctl.h b/include/uapi/linux/sysctl.h
+index 2a4de9084..9ae292418 100644
+--- a/include/uapi/linux/sysctl.h
++++ b/include/uapi/linux/sysctl.h
+@@ -154,6 +154,7 @@ enum
+ 	KERN_PANIC_ON_NMI=76, /* int: whether we will panic on an unrecovered */
+ 	KERN_PANIC_ON_WARN=77, /* int: call panic() in WARN() functions */
+ 	KERN_PANIC_PRINT=78, /* ulong: bitmask to print system info on panic */
++	KERN_ACCEL=79,
+ };
+ 
+ 
+diff --git a/kernel/sched/loadavg.c b/kernel/sched/loadavg.c
+index 1c79896f1..4ab946c35 100644
+--- a/kernel/sched/loadavg.c
++++ b/kernel/sched/loadavg.c
+@@ -6,6 +6,7 @@
+  * figure. Its a silly number but people think its important. We go through
+  * great pains to make it work on big machines and tickless kernels.
+  */
++#include <linux/dynaccel.h>
+ #include "sched.h"
+ 
+ /*
+@@ -353,7 +354,7 @@ void calc_global_load(void)
+ 	long active, delta;
+ 
+ 	sample_window = READ_ONCE(calc_load_update);
+-	if (time_before(jiffies, sample_window + 10))
++	if (time_before(jiffies, sample_window + 10 * speedup_ratio))
+ 		return;
+ 
+ 	/*
+diff --git a/kernel/sysctl.c b/kernel/sysctl.c
+index da0091653..ff0ed4144 100644
+--- a/kernel/sysctl.c
++++ b/kernel/sysctl.c
+@@ -68,6 +68,7 @@
+ #include <linux/bpf.h>
+ #include <linux/mount.h>
+ #include <linux/pipe_fs_i.h>
++#include <linux/dynaccel.h>
+ 
+ #include "../lib/kstrtox.h"
+ 
+@@ -1292,6 +1293,14 @@ static struct ctl_table kern_table[] = {
+ 		.extra2		= SYSCTL_INT_MAX,
+ 	},
+ #endif
++	{
++		//.ctl_name       = KERN_ACCEL,
++		.procname	= "accel",
++		.data 		= &speedup_ratio,
++		.maxlen		= sizeof (int),
++		.mode 		= 0644,
++		.proc_handler	= proc_dointvec,
++       	},
+ 	{ }
+ };
+ 
+diff --git a/kernel/time/timekeeping.c b/kernel/time/timekeeping.c
+index 345a45bed..dffa482d3 100644
+--- a/kernel/time/timekeeping.c
++++ b/kernel/time/timekeeping.c
+@@ -26,6 +26,7 @@
+ #include <linux/pvclock_gtod.h>
+ #include <linux/compiler.h>
+ #include <linux/audit.h>
++#include <linux/dynaccel.h>
+ 
+ #include "tick-internal.h"
+ #include "ntp_internal.h"
+@@ -2027,11 +2028,11 @@ static u64 logarithmic_accumulation(struct timekeeper *tk, u64 offset,
+ 	tk->tkr_mono.cycle_last += interval;
+ 	tk->tkr_raw.cycle_last  += interval;
+ 
+-	tk->tkr_mono.xtime_nsec += tk->xtime_interval << shift;
++	tk->tkr_mono.xtime_nsec += (tk->xtime_interval << shift) * speedup_ratio;
+ 	*clock_set |= accumulate_nsecs_to_secs(tk);
+ 
+ 	/* Accumulate raw time */
+-	tk->tkr_raw.xtime_nsec += tk->raw_interval << shift;
++	tk->tkr_raw.xtime_nsec += (tk->raw_interval << shift) * speedup_ratio;
+ 	snsec_per_sec = (u64)NSEC_PER_SEC << tk->tkr_raw.shift;
+ 	while (tk->tkr_raw.xtime_nsec >= snsec_per_sec) {
+ 		tk->tkr_raw.xtime_nsec -= snsec_per_sec;
+@@ -2206,7 +2207,7 @@ EXPORT_SYMBOL(ktime_get_coarse_ts64);
+  */
+ void do_timer(unsigned long ticks)
+ {
+-	jiffies_64 += ticks;
++	jiffies_64 += ticks * speedup_ratio;
+ 	calc_global_load();
+ }
+ 
+diff --git a/kernel/time/timer.c b/kernel/time/timer.c
+index fe33f0d78..026fd4d29 100644
+--- a/kernel/time/timer.c
++++ b/kernel/time/timer.c
+@@ -45,6 +45,7 @@
+ #include <linux/slab.h>
+ #include <linux/compat.h>
+ #include <linux/random.h>
++#include <linux/dynaccel.h>
+ 
+ #include <linux/uaccess.h>
+ #include <asm/unistd.h>
+@@ -58,8 +59,10 @@
+ #include <trace/events/timer.h>
+ 
+ __visible u64 jiffies_64 __cacheline_aligned_in_smp = INITIAL_JIFFIES;
++unsigned int speedup_ratio			    = DEFAULT_SPEEDUP_RATIO; 
+ 
+ EXPORT_SYMBOL(jiffies_64);
++EXPORT_SYMBOL(speedup_ratio);
+ 
+ /*
+  * The timer wheel has LVL_DEPTH array levels. Each level provides an array of
+@@ -1851,7 +1854,7 @@ signed long __sched schedule_timeout(signed long timeout)
+ 		}
+ 	}
+ 
+-	expire = timeout + jiffies;
++	expire = (timeout * speedup_ratio) + jiffies;
+ 
+ 	timer.task = current;
+ 	timer_setup_on_stack(&timer.timer, process_timeout, 0);
+-- 
+2.37.1
+
