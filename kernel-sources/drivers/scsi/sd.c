@@ -57,7 +57,11 @@
 #include <linux/pr.h>
 #include <linux/t10-pi.h>
 #include <linux/uaccess.h>
+<<<<<<< HEAD:kernel-sources/drivers/scsi/sd.c
 #include <linux/dynaccel.h>
+=======
+#include <dynaccel.h>
+>>>>>>> main:drivers/scsi/sd.c
 #include <asm/unaligned.h>
 
 #include <scsi/scsi.h>
@@ -870,7 +874,11 @@ static blk_status_t sd_setup_write_same16_cmnd(struct scsi_cmnd *cmd,
 
 	cmd->allowed = sdkp->aux->max_retries;
 	cmd->transfersize = data_len;
+<<<<<<< HEAD:kernel-sources/drivers/scsi/sd.c
 	rq->timeout = (unmap ? SD_TIMEOUT : SD_WRITE_SAME_TIMEOUT) * speedup_ratio;
+=======
+	rq->timeout = unmap ? (SD_TIMEOUT : SD_WRITE_SAME_TIMEOUT) * speedup_ratio;
+>>>>>>> main:drivers/scsi/sd.c
 	scsi_req(rq)->resid_len = data_len;
 
 	return scsi_alloc_sgtables(cmd);
@@ -903,7 +911,11 @@ static blk_status_t sd_setup_write_same10_cmnd(struct scsi_cmnd *cmd,
 
 	cmd->allowed = sdkp->aux->max_retries;
 	cmd->transfersize = data_len;
+<<<<<<< HEAD:kernel-sources/drivers/scsi/sd.c
 	rq->timeout = (unmap ? SD_TIMEOUT : SD_WRITE_SAME_TIMEOUT) * speedup_ratio;
+=======
+	rq->timeout = unmap ? (SD_TIMEOUT : SD_WRITE_SAME_TIMEOUT) * speedup_ratio;
+>>>>>>> main:drivers/scsi/sd.c
 	scsi_req(rq)->resid_len = data_len;
 
 	return scsi_alloc_sgtables(cmd);
@@ -2195,7 +2207,11 @@ sd_spinup_disk(struct scsi_disk *sdkp)
 				sshdr.sense_key == UNIT_ATTENTION &&
 				sshdr.asc == 0x28) {
 			if (!spintime) {
+<<<<<<< HEAD:kernel-sources/drivers/scsi/sd.c
 				spintime_expire = jiffies + 5 * HZ * speedup_ratio;
+=======
+				spintime_expire = jiffies + 5 * HZ * speedup_ratio; 
+>>>>>>> main:drivers/scsi/sd.c
 				spintime = 1;
 			}
 			/* Wait 1 second for next try */

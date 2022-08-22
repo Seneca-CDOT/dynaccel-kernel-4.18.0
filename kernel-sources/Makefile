@@ -2,7 +2,11 @@
 VERSION = 4
 PATCHLEVEL = 18
 SUBLEVEL = 0
+<<<<<<< HEAD:kernel-sources/Makefile
 EXTRAVERSION = -394.el8-dynaccel
+=======
+EXTRAVERSION = -408.el8-dynaccel
+>>>>>>> main:Makefile
 NAME = Merciless Moray
 
 #
