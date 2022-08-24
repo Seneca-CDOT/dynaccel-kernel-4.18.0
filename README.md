@@ -38,12 +38,11 @@ Below is the steps required to build the Dynaccel RPM packages:
    ![RPMbuild tree](https://i.ibb.co/QQpsVbp/RPMbuild-tree.png)
 3. Copy the ```*src.rpm``` to the ```SRPMS``` folder and install it - ```rpm -i kernel*src.rpm```.
 4. Build the RPM - ```rpmbuild -bb --without debuginfo --target=`uname -m` SPECS/kernel.spec```
-
-You can refer to [the Wiki Page](https://wiki.cdot.senecacollege.ca/wiki/Signing_and_Creating_a_Repository_for_RPM_Packages) on how to create and sign an RPM repository.
+5. Next steps would be to create and sign an RPM repository. Refer to [the Wiki Page](https://wiki.cdot.senecacollege.ca/wiki/Signing_and_Creating_a_Repository_for_RPM_Packages) on how to do it.
 
 **The ```kernel.spec``` specifies EPOCH 1 for Dynaccel to take precedence over the DNF kernel ignoring Version.**
 
 ### Notes
 
 - **The kernel and SRC.RPM should be compiled under ```gcc-8``` and ```g++-8```** otherwise the compilation will fail.
-- **The SRC.RPM should be built using ```mock``` utility with ```-r centos-stream-8-x86_64```** if required compiler version is not present.
+- **The SRC.RPM should be built using ```mock``` utility - ```mock -r centos-stream-8-x86_64 *src.rpm```** if required compiler version is not present.
