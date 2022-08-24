@@ -34,11 +34,14 @@ The current value can be accessed through ```cat /proc/sys/kernel/accel```.
 
 Below is the steps required to build the Dynaccel RPM packages:
 1. Install RPM Developer tools - ```sudo dnf -y install rpmdevtools``` or ```sudo yum -y install rpmdevtools```.
-2. Set up the RPM build tree - ```rpmdev-setuptree```
-3. 
-
+2. Set up the RPM build tree - ```rpmdev-setuptree``` and ```cd rpmbuild```.<br/><br/>
+   ![RPMbuild tree](https://i.ibb.co/QQpsVbp/RPMbuild-tree.png)
+3. Copy the ```*src.rpm``` to the ```SRPMS``` folder and install it - ```rpm -i kernel*src.rpm```.
+4. Build the RPM - ```rpmbuild -bb --without debuginfo --target=`uname -m` SPECS/kernel.spec```
 
 You can refer to [the Wiki Page](https://wiki.cdot.senecacollege.ca/wiki/Signing_and_Creating_a_Repository_for_RPM_Packages) on how to create and sign an RPM repository.
+
+**The ```kernel.spec``` specifies EPOCH 1 for Dynaccel to take precedence over the DNF kernel ignoring Version.**
 
 ### Notes
 
