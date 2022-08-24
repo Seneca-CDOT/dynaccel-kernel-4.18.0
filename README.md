@@ -5,16 +5,24 @@
 ### Table of Contents
 
 #### [1. Overview](#Overview)
-#### [2. Limitations](#Limitation)
-#### [3. Kernel Usage](#Kernel-Usage)
-#### [4. Source RPM build](#Source-RPM-Build)
+#### [2. Project Structure](#Project-Structure)
+#### [3. Limitations](#Limitation)
+#### [4. Kernel Usage](#Kernel-Usage)
+#### [5. Source RPM build](#Source-RPM-Build)
 ---
 
 ### Overview
 
-The **Dynaccel kernel** can be used in testing environments where 
-<br/><br/>The idea originated from [this repository](https://github.com/ystk/dynamic-acceleration).</br>
-A presenation by the original authors (Toshiba) discribing this work is at [this PDF](https://elinux.org/images/6/6d/Linux_Kernel_Acceleration_for_Long-term_Testing.pdf). 
+The **Dynaccel kernel** is a Linux kernel that can speed up the testing process in an environment by accelerating the kernel flow of time. The ratio to which the time is accelerated can be change dynamically through the kernel interface - ```/proc```.
+<br/><br/>The idea originated from [the repository](https://github.com/ystk/dynamic-acceleration).</br>
+A presenation by the original authors (Toshiba) describing this work - [this PDF](https://elinux.org/images/6/6d/Linux_Kernel_Acceleration_for_Long-term_Testing.pdf). 
+
+### Project Structure
+
+- ```kernel-sources``` - a folder containing the Dynaccel kernel source code
+- ```config-x86_64```  - a reference of kernel config for x86_64 used in compilation
+- ```dynaccel-patches.patch``` - a patch file containing the changes for Dynaccel functionality 
+- ```kernel-4.18.0-394.el8.dynaccel.src.rpm``` - a SRC.RPM file containing everything for the RPM build
 
 ### Limitations
 
