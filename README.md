@@ -6,9 +6,9 @@
 
 #### [1. Overview](#Overview)
 #### [2. Project Structure](#Project-Structure)
-#### [3. Limitations](#Limitation)
-#### [4. Kernel Usage](#Kernel-Usage)
-#### [5. Source RPM build](#Source-RPM-Build)
+#### [3. Kernel Usage](#Kernel-Usage)
+#### [4. Source RPM build](#Source-RPM-Build)
+#### [5. Notes](#Notes)
 ---
 
 ### Overview
@@ -19,19 +19,20 @@ A presenation by the original authors (Toshiba) describing this work - [this PDF
 
 ### Project Structure
 
-- ```kernel-sources``` - a folder containing the Dynaccel kernel source code
+- ```kernel-sources``` - a folder containing the Dynaccel kernel source code. [README](./kernel-sources/README.md)
 - ```config-x86_64```  - a reference of kernel config for x86_64 used in compilation
 - ```dynaccel-patches.patch``` - a patch file containing the changes for Dynaccel functionality 
 - ```kernel-4.18.0-394.el8.dynaccel.src.rpm``` - a SRC.RPM file containing everything for the RPM build
 
-### Limitations
-
-- **The kernel and SRC.RPM should be compiled under ```gcc-8``` and ```g++-8```** otherwise the compilation will fail.
-- **The SRC.RPM should be built using ```mock``` utility with ```-r centos-stream-8-x86_64```** if required compiler version is not present.
-
 ### Kernel Usage
 
-The ```speedup_ratio``` (dynamic acceleration) can be changed using ```sysctl```. Example: ```sysctl --write kernel.accel=50```.<br/>
+The ```speedup_ratio``` (dynamic acceleration) can be changed using ```sysctl```.
+<br/>Example: ```sysctl --write kernel.accel=50```.<br/>
 The current value can be accessed through ```cat /proc/sys/kernel/accel```.
 
 ### Source RPM Build
+
+### Notes
+
+- **The kernel and SRC.RPM should be compiled under ```gcc-8``` and ```g++-8```** otherwise the compilation will fail.
+- **The SRC.RPM should be built using ```mock``` utility with ```-r centos-stream-8-x86_64```** if required compiler version is not present.
