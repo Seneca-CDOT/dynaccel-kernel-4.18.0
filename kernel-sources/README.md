@@ -27,3 +27,7 @@ See Documentation/00-INDEX for a list of what is contained in each file.
 Please read the Documentation/process/changes.rst file, as it contains the
 requirements for building and running the kernel, and information about
 the problems which may result by upgrading your kernel.
+
+### Notes
+
+The ```../config-x86_64``` can be used to compile the kernel.
