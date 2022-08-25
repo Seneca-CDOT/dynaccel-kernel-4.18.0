@@ -30,4 +30,10 @@ the problems which may result by upgrading your kernel.
 
 ### Notes
 
-The ```../config-x86_64``` can be used to compile the kernel.
+The ```../config-x86_64``` can be used to compile the kernel:<br/>
+1. Copy the desired config file to the root of the kernel source - ```cp ../config-x86_64 ./kernel-sources/.config```.
+2. Run ```make oldconfig```.
+3. Run ```make menuconfig``` to make changes to the provided config. For a graphical UI, instead run - ```mske xconfig```.
+
+
+ 
