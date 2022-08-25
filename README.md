@@ -1,9 +1,51 @@
-### Dynamic Accelereted Linux kernel based on CentOS8s
-#### Version: 4.18.0-408.el8.x86_64
+# Dynamic Accelereted Linux kernel based on CentOS8s
+### Version: 4.18.0-394.el8.x86_64
 ---
-The idea originated from [this repository](https://github.com/ystk/dynamic-acceleration) </br>
-A presenation by the original authors (Toshiba) discribing this work is at [this PDF](https://elinux.org/images/6/6d/Linux_Kernel_Acceleration_for_Long-term_Testing.pdf)
 
-- **The kernel should be compiled under gcc-8 and g++-8** otherwise the compilation will fail. <br>
-- The speedup_ratio (acceleration) can be changed using ```sysctl```. Example: ```sysctl --write kernel.accel=50```. 
-The value can be displayed using ```cat /proc/sys/kernel/accel```
+### Table of Contents
+
+#### [1. Overview](#Overview)
+#### [2. Project Structure](#Project-Structure)
+#### [3. Kernel Usage](#Kernel-Usage)
+#### [4. Source RPM build](#Source-RPM-Build)
+#### [5. Limitations](#Limitations)
+---
+
+### Overview
+
+The **Dynaccel kernel** is a Linux kernel that can speed up the testing process in an environment by accelerating the kernel flow of time. The ratio to which the time is accelerated can be change dynamically through the kernel interface - ```/proc```.
+<br/><br/>The idea originated from [the repository](https://github.com/ystk/dynamic-acceleration).</br>
+A presenation by the original authors (Toshiba) describing this work - [PDF](https://elinux.org/images/6/6d/Linux_Kernel_Acceleration_for_Long-term_Testing.pdf).
+<br/><br/>
+The kernel is based on the current CentOS8s kernel 4.18.0.
+
+### Project Structure
+
+- ```kernel-sources``` - a folder containing the Dynaccel kernel source code. [README.md](./kernel-sources/README.md)
+- ```config-x86_64```  - a reference of kernel config for x86_64 used in compilation
+- ```dynaccel-patches.patch``` - a patch file containing the changes for Dynaccel functionality 
+- ```kernel-4.18.0-394.el8.dynaccel.src.rpm``` - a SRC.RPM file containing everything for the RPM build
+
+### Kernel Usage
+
+The ```speedup_ratio``` (dynamic acceleration) can be changed using ```sysctl```.
+<br/>Example: ```sysctl --write kernel.accel=50```.<br/>
+The current value can be accessed through ```cat /proc/sys/kernel/accel```.
+
+### Source RPM Build
+
+Below is the steps required to build the Dynaccel RPM packages:
+1. Install RPM Developer tools - ```sudo dnf -y install rpmdevtools``` or ```sudo yum -y install rpmdevtools```.
+2. Set up the RPM build tree - ```rpmdev-setuptree``` and ```cd rpmbuild```.<br/><br/>
+   ![RPMbuild tree](https://i.ibb.co/QQpsVbp/RPMbuild-tree.png)
+3. Copy the ```*src.rpm``` to the ```SRPMS``` folder and install it - ```rpm -i kernel*src.rpm```.
+4. Build the RPM:
+   - With ```rpmbuild -bb --target=x86_64 SPECS/kernel.spec```, if gcc-8 is present.
+   - With ```mock``` utility - ```mock -r centos-stream-8-x86_64 *src.rpm```, if required compiler version is not present.
+5. Next steps would be to create and sign an RPM repository. Refer to [the Wiki Page](https://wiki.cdot.senecacollege.ca/wiki/Signing_and_Creating_a_Repository_for_RPM_Packages) on how to do it.
+
+**The ```kernel.spec``` specifies EPOCH 1 for Dynaccel to take precedence over the DNF kernel ignoring Version.**
+
+### Limitations
+
+- **The kernel and SRC.RPM should be compiled under ```gcc-8``` and ```g++-8```** otherwise the compilation will fail.
