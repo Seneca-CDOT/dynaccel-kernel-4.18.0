@@ -47,8 +47,11 @@ Below is the steps required to build the Dynaccel RPM packages:
 3. Copy the ```*src.rpm``` to the ```SRPMS``` folder and install it - ```rpm -i kernel*src.rpm```.
 4. Build the RPM:
    - With ```rpmbuild -bb --target=x86_64 SPECS/kernel.spec```, if gcc-8 is present.
-   - With ```mock``` utility - ```mock -r centos-stream-8-x86_64 *src.rpm```, if gcc-8 is not present. (Utility needs to be installed first)
-5. Next steps would be to create and sign an RPM repository. Refer to [the Wiki Page](https://wiki.cdot.senecacollege.ca/wiki/Signing_and_Creating_a_Repository_for_RPM_Packages) on how to do it.
+   - With ```mock``` utility - ```mock -r centos-stream-8-x86_64 *src.rpm```, if gcc-8 is not present.
+5. Next steps would be to create and sign an RPM repository. 
+   Refer to [the Wiki Page](https://wiki.cdot.senecacollege.ca/wiki/Signing_and_Creating_a_Repository_for_RPM_Packages) on how to do it.
+   
+Additionally, there is a good [guide](https://www.fedoraproject.org/wiki/Building_a_custom_kernel/Source_RPM) on the Fedora Wiki page on how to build a custom kernel RPM package.
 
 **After the RPM repository is set up locally, a simple ```dnf update --refresh``` will install all the packages and update to the Dynaccel kernel.**
 
@@ -57,8 +60,8 @@ Below is the steps required to build the Dynaccel RPM packages:
 - The ```kernel.spec``` specifies EPOCH 1 for Dynaccel to take precedence over the latest kernel present in DNF.
 - Inner VM's installed under the Dynaccel kernel inherit the flow of time (accelerated as well).
   * However, an Inner VM's Watchdog that kernel should reset periodically does not function properly and goes off early. It causes kernel panics, making the system almost unusable.
-    * The issue can temporarily be fixed by disabling the Watchdog with ```sysctl kernel.nmi_watchdog=0```.
-    * To disable for subsequent boots add ```kernel.nmi_watchdog=0``` to /etc/sysctl.conf.
+    * The issue can temporarily be fixed by disabling the Watchdog with ```sysctl kernel.nmi_watchdog=0```
+    * To disable for subsequent boots add ```kernel.nmi_watchdog=0``` line to /etc/sysctl.conf
 - The acceleration ratio can be adjusted in the range of 1 to 1000, but the 'stable' range is from 1 to 200.
 
 ### Limitations
