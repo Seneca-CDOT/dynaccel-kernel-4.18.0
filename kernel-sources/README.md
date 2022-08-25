@@ -1,10 +1,10 @@
 # Dynamic Accelereted Linux kernel based on CentOS8s
 ### Version: 4.18.0-394.el8.x86_64
 ---
-The idea originated from [this repository](https://github.com/ystk/dynamic-acceleration) </br>
-A presenation by the original authors (Toshiba) discribing this work is at [this PDF](https://elinux.org/images/6/6d/Linux_Kernel_Acceleration_for_Long-term_Testing.pdf)
+The idea originated from [this repository](https://github.com/ystk/dynamic-acceleration)</br>
+A presenation by the original authors (Toshiba) discribing - [PDF](https://elinux.org/images/6/6d/Linux_Kernel_Acceleration_for_Long-term_Testing.pdf)
 
-- **The kernel should be compiled under gcc-8 and g++-8** otherwise the compilation will fail. <br>
+- **The kernel should be compiled under gcc-8 and g++-8**, otherwise the compilation will probably fail. <br>
 - The speedup_ratio (acceleration) can be changed using ```sysctl```. 
 
 Example: ```sysctl --write kernel.accel=50```. 
@@ -33,7 +33,7 @@ the problems which may result by upgrading your kernel.
 The ```../config-x86_64``` can be used to compile the kernel:<br/>
 1. Copy the desired config file to the root of the kernel source - ```cp ../config-x86_64 ./kernel-sources/.config```.
 2. Run ```make oldconfig```.
-3. Run ```make menuconfig``` to make changes to the provided config. For a graphical UI, instead run - ```mske xconfig```.
+3. Run ```make menuconfig``` to make changes to the provided config. For a graphical UI, instead run - ```make xconfig```.
 
 
  
