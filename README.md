@@ -1,5 +1,6 @@
 # Dynamic Accelereted Linux kernel based on CentOS8s
 ### Version: 4.18.0-394.el8.x86_64
+### [Presentation](./Dynamic%20Acceleration%20Kernel.pdf)
 ---
 
 ### Table of Contents
