@@ -6,11 +6,12 @@
 ### Table of Contents
 
 #### [1. Overview](#Overview)
-#### [2. Project Structure](#Project-Structure)
-#### [3. Kernel Usage](#Kernel-Usage)
-#### [4. Source RPM build](#Source-RPM-Build)
-#### [5. Notes](#Notes)
-#### [6. Limitations](#Limitations)
+#### [2. Kernel Installation](#Kernel-Installation)
+#### [3. Project Structure](#Project-Structure)
+#### [4. Kernel Usage](#Kernel-Usage)
+#### [5. Source RPM build](#Source-RPM-Build)
+#### [6. Notes](#Notes)
+#### [7. Limitations](#Limitations)
 ---
 
 ### Overview
@@ -22,6 +23,21 @@ The idea originated from [the repository](https://github.com/ystk/dynamic-accele
 A slides by the original authors (Toshiba) describing this work - [PDF](https://elinux.org/images/6/6d/Linux_Kernel_Acceleration_for_Long-term_Testing.pdf).
 <br/><br/>
 The kernel is based on the upstream CentOS8s kernel 4.18.0.
+
+### Kernel Installation
+
+The **Dynaccel kernel** can be installed through a DNF update on a Centos8 Strean system:
+- Create `dynaccel.repo` file in the `/etc/yum.repos.d/` folder
+- Add the following content to the created file:
+``` 
+[dynaccel]
+name=dynaccel
+baseurl=http://portugal.cdot.systems/dynaccel
+gpgcheck=0
+enabled=1
+```
+
+**After the RPM repository is set up locally, a simple ```dnf update --refresh``` will install all the packages and update to the Dynaccel kernel.**
 
 ### Project Structure
 
@@ -53,8 +69,6 @@ Below is the steps required to build the Dynaccel RPM packages:
    Refer to [the Wiki Page](https://wiki.cdot.senecacollege.ca/wiki/Signing_and_Creating_a_Repository_for_RPM_Packages) on how to do it.
    
 Additionally, there is a good [guide](https://www.fedoraproject.org/wiki/Building_a_custom_kernel/Source_RPM) on the Fedora Wiki page on how to build a custom kernel RPM package.
-
-**After the RPM repository is set up locally, a simple ```dnf update --refresh``` will install all the packages and update to the Dynaccel kernel.**
 
 ### Notes
 
